@@ -1,4 +1,4 @@
-const Restaurant = require("../models/Restaurant");
+const Restaurant = require("../models/restaurant");
 
 // @desc    Lấy thông tin cấu hình nhà hàng
 // @route   GET /api/restaurant
