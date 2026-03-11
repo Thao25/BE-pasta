@@ -2,13 +2,16 @@ const mongoose = require("mongoose");
 
 const connectDB = async () => {
   try {
-    // Lấy chuỗi kết nối từ biến môi trường
-    const conn = await mongoose.connect(process.env.MONGO_URI, {});
+    console.log("Connecting to MongoDB...");
 
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
+    const conn = await mongoose.connect(process.env.MONGO_URI, {
+      serverSelectionTimeoutMS: 30000,
+      family: 4,
+    });
+
+    console.log("MongoDB Connected:", conn.connection.host);
   } catch (error) {
-    console.error(`Error: ${error.message}`);
-    // Thoát ứng dụng nếu kết nối thất bại
+    console.error("MongoDB connection error:", error);
     process.exit(1);
   }
 };
