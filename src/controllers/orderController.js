@@ -1,5 +1,5 @@
-const Order = require("../models/order");
-const Table = require("../models/table");
+const Order = require("../models/Order");
+const Table = require("../models/Table");
 const Food = require("../models/Food");
 
 // @desc    Tạo đơn hàng mới (Khách đặt món từ Zalo)

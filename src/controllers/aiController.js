@@ -1,6 +1,6 @@
 const Food = require("../models/Food");
-const Restaurant = require("../models/restaurant");
-const Order = require("../models/order");
+const Restaurant = require("../models/Restaurant");
+const Order = require("../models/Order");
 
 // --- PHẦN 1: AI "TỰ CHẾ" (BACKUP PLAN) ---
 // Giữ nguyên logic chat thông minh đã làm ở bước trước

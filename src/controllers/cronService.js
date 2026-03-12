@@ -1,6 +1,6 @@
 const cron = require("node-cron");
 const Food = require("../models/Food");
-const Restaurant = require("../models/restaurant");
+const Restaurant = require("../models/Restaurant");
 
 const startCronJobs = () => {
   // =========================================================================
