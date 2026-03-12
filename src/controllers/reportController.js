@@ -1,4 +1,4 @@
-const Order = require("../models/Order");
+const Order = require("../models/order");
 const User = require("../models/User");
 
 // Hàm hỗ trợ tính toán khoảng thời gian (Start Date - End Date)
