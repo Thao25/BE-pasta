@@ -1,5 +1,5 @@
 const Table = require("../models/table");
-const ZALO_MINI_APP_ID = process.env.ZALO_APP_ID || "2092616308594557322";
+const ZALO_MINI_APP_ID = process.env.ZALO_APP_ID;
 // @desc    Lấy danh sách tất cả các bàn
 // @route   GET /api/tables
 // @access
