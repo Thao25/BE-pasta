@@ -1,5 +1,5 @@
 const Table = require("../models/table");
-const ZALO_MINI_APP_ID = process.env.ZALO_APP_ID || "2092616308594557322";
+const ZALO_MINI_APP_ID = process.env.ZALO_APP_ID;
 // @desc    Lấy danh sách tất cả các bàn
 // @route   GET /api/tables
 // @access
@@ -7,6 +7,26 @@ const getTables = async (req, res) => {
   try {
     const tables = await Table.find().sort({ SoBan: 1 }); // Sắp xếp theo tên bàn
     res.json({ message: 0, data: tables });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi server", error: error.message });
+  }
+};
+
+/**
+ * @desc    Lấy thông tin chi tiết 1 bàn theo ID (Bổ sung cho Zalo App)
+ * @route   GET /api/tables/:id
+ */
+const getTableById = async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id);
+
+    if (!table) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy thông tin bàn này." });
+    }
+
+    res.json({ message: 0, data: table });
   } catch (error) {
     res.status(500).json({ message: "Lỗi server", error: error.message });
   }
@@ -111,6 +131,7 @@ const updateTableStatus = async (req, res) => {
 
 module.exports = {
   getTables,
+  getTableById,
   createTable,
   updateTableInfo,
   updateTableStatus,

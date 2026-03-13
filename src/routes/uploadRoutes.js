@@ -59,9 +59,9 @@ const router = express.Router();
 // Các thông số này nên được để trong file .env để bảo mật
 // ==========================================================
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_NAME || "dlxltiv12",
-  api_key: process.env.CLOUDINARY_KEY || "833839784177244",
-  api_secret: process.env.CLOUDINARY_SECRET || "2b0els9N21NqCh63gAt3F9H9R68",
+  cloud_name: process.env.CLOUDINARY_NAME,
+  api_key: process.env.CLOUDINARY_KEY,
+  api_secret: process.env.CLOUDINARY_SECRET,
 });
 
 // ==========================================================
@@ -87,7 +87,6 @@ router.post("/", uploadCloud.single("image"), (req, res) => {
         .json({ success: false, message: "Không có tệp nào được tải lên!" });
     }
 
-    // link URL của Cloudinary (vd: https://res.cloudinary.com/dlxltiv12/image/upload/v1773327790/pasta_qr_order/uaozan1wk3p3sqtukarx.png)
     res.send(req.file.path);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

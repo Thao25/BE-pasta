@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const {
   getTables,
+  getTableById,
   createTable,
   updateTableInfo,
   updateTableStatus,
@@ -9,6 +10,9 @@ const {
 
 // GET /api/tables -> Lấy danh sách
 router.route("/").get(getTables);
+
+// GET /api/tables/:id -> Lấy thông tin bàn theo ID
+router.route("/:id").get(getTableById);
 
 // POST /api/tables -> Tạo bàn mới
 router.route("/").post(createTable);
