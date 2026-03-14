@@ -5,7 +5,7 @@ const jwt = require("jsonwebtoken");
 // Hàm tạo Token JWT
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET || "secret_key_tam_thoi", {
-    expiresIn: "30d", // Token sống 30 ngày
+    expiresIn: "30d",
   });
 };
 
@@ -26,7 +26,7 @@ const loginUser = async (req, res) => {
           _id: user._id,
           HoTen: user.HoTen,
           Role: user.Role,
-          Token: generateToken(user._id), // Trả về chìa khóa đăng nhập
+          Token: generateToken(user._id),
         },
       });
     } else {
@@ -137,12 +137,10 @@ const updateUserRole = async (req, res) => {
 
     // Bảo vệ tài khoản admin gốc
     if (user.Role === "QuanLy") {
-      return res
-        .status(403)
-        .json({
-          message: 1,
-          error: "Không thể thay đổi quyền của tài khoản Admin ",
-        });
+      return res.status(403).json({
+        message: 1,
+        error: "Không thể thay đổi quyền của tài khoản Admin ",
+      });
     }
 
     user.Role = Role;
@@ -183,6 +181,42 @@ const deleteUser = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Xử lý đăng nhập/đăng ký tự động cho khách hàng từ Zalo
+ * @route   POST /api/users/zalo-login
+ */
+const loginZalo = async (req, res) => {
+  try {
+    const { ZaloId, Username, Avatar } = req.body;
+
+    if (!ZaloId) {
+      return res.status(400).json({ message: 1, error: "Thiếu ZaloId" });
+    }
+
+    // Tìm khách hàng trong DB
+    let user = await User.findOne({ ZaloId });
+
+    if (user) {
+      // Nếu đã tồn tại, cập nhật lại tên và ảnh mới nhất (phòng trường hợp khách đổi)
+      user.Username = Username || user.Username;
+      user.Avatar = Avatar || user.Avatar;
+      await user.save();
+    } else {
+      // Nếu chưa có, tạo mới với vai trò KhachHang
+      user = await User.create({
+        ZaloId,
+        Username: Username || "Khách hàng Zalo",
+        Avatar: Avatar || "",
+        Role: "KhachHang",
+      });
+    }
+
+    res.json({ message: 0, data: user });
+  } catch (error) {
+    res.status(500).json({ message: 1, error: error.message });
+  }
+};
+
 module.exports = {
   loginUser,
   registerUser,
@@ -190,4 +224,5 @@ module.exports = {
   getUsers,
   updateUserRole,
   deleteUser,
+  loginZalo,
 };

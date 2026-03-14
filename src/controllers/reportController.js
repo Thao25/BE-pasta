@@ -317,6 +317,10 @@ const exportDetailedReport = async (req, res) => {
             <td><b>Tổng doanh thu thực tế:</b></td>
             <td class="text-center currency"> <b>${tongDoanhThu.toLocaleString("vi-VN")} VNĐ</b></td>
           </tr>
+            <tr>
+            <td><b>Khách hàng mới:</b></td>
+            <td class="text-center"><b>${khachHangMoi} đơn</b></td>
+          </tr>
         </table>
 
              <h3   colspan="2" class="summary-box">THỐNG KÊ MẶT HÀNG BÁN RA (TOP BÁN CHẠY)</h3>

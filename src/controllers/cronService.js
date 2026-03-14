@@ -1,95 +1,144 @@
 const cron = require("node-cron");
 const Food = require("../models/Food");
 const Restaurant = require("../models/restaurant");
+const Table = require("../models/table");
 
 const startCronJobs = () => {
-  // =========================================================================
-  // 1. TÁC VỤ 1: RESET TRẠNG THÁI MÓN "HẾT HÀNG" THÀNH "ĐANG BÁN" LÚC NỬA ĐÊM
-  // =========================================================================
+  // 1. Reset trạng thái món "Hết hàng" về "Đang bán" vào lúc 00:00 hằng ngày
   cron.schedule(
     "0 0 * * *",
     async () => {
       try {
-        console.log(
-          "⏰ [CRON JOB] Đang chạy tác vụ kiểm tra và reset trạng thái món ăn...",
-        );
-        const result = await Food.updateMany(
+        await Food.updateMany(
           { TrangThai: "HetHang" },
           { $set: { TrangThai: "DangBan" } },
         );
-        console.log(
-          `✅ [CRON JOB] Hoàn tất! Đã tự động mở bán lại ${result.modifiedCount} món ăn.`,
-        );
+        console.log("⏰ [CRON] Đã reset trạng thái món ăn cho ngày mới.");
       } catch (error) {
-        console.error("❌ [CRON JOB] Lỗi khi reset trạng thái món ăn:", error);
+        console.error("❌ [CRON] Lỗi reset món ăn:", error);
       }
     },
-    {
-      scheduled: true,
-      timezone: "Asia/Ho_Chi_Minh",
-    },
+    { scheduled: true, timezone: "Asia/Ho_Chi_Minh" },
   );
 
-  // =========================================================================
-  // 2. TÁC VỤ 2: TỰ ĐỘNG ĐÓNG/MỞ CỬA THEO GIỜ CÀI ĐẶT (CHẠY MỖI PHÚT)
-  // =========================================================================
-  // '* * * * *' nghĩa là chạy mỗi phút một lần
+  // 2. Tác vụ kiểm tra mỗi phút: Quản lý Đóng/Mở cửa và Dọn bàn tự động
   cron.schedule("* * * * *", async () => {
     try {
-      const restaurant = await Restaurant.findOne();
+      const res = await Restaurant.findOne();
+      if (!res) return;
 
-      if (!restaurant || !restaurant.CauHinh) return;
-
-      const { GioMoCua, GioDongCua } = restaurant.CauHinh;
-      if (!GioMoCua || !GioDongCua) return;
-
-      // Lấy giờ phút hiện tại theo chuẩn múi giờ Việt Nam
       const now = new Date();
+      // Chuyển đổi sang múi giờ Việt Nam
       const vnTime = new Date(
         now.toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }),
       );
+      const curTimeStr = `${vnTime.getHours().toString().padStart(2, "0")}:${vnTime.getMinutes().toString().padStart(2, "0")}`;
 
-      const currentHour = vnTime.getHours();
-      const currentMinute = vnTime.getMinutes();
-
-      // Format thành chuỗi HH:mm (VD: "08:05", "22:30") để so sánh chuỗi trực tiếp
-      const currentTimeStr = `${currentHour.toString().padStart(2, "0")}:${currentMinute.toString().padStart(2, "0")}`;
-
-      let isOpen = false;
-
-      // Logic tính toán trạng thái mở cửa
-      if (GioMoCua < GioDongCua) {
-        isOpen = currentTimeStr >= GioMoCua && currentTimeStr < GioDongCua;
-      } else {
-        // Trường hợp bán xuyên đêm qua ngày hôm sau (VD: Mở 18:00, Đóng 02:00)
-        isOpen = currentTimeStr >= GioMoCua || currentTimeStr < GioDongCua;
+      // A. KIỂM TRA TỰ ĐỘNG MỞ CỬA LẠI (Nếu đang trong thời gian tạm ngưng 30p/1h/Hôm nay)
+      if (
+        !res.TrangThaiHoatDong &&
+        res.TamNgungDen &&
+        vnTime >= res.TamNgungDen
+      ) {
+        res.TrangThaiHoatDong = true;
+        res.TamNgungDen = null;
+        await res.save();
+        if (global.io)
+          global.io.emit("restaurant_status_changed", { isOpen: true });
+        console.log(
+          "🔓 [CRON] Nhà hàng đã tự động mở cửa trở lại sau thời gian tạm ngưng.",
+        );
       }
 
-      // So sánh với trạng thái hiện tại trong DB, nếu khác thì mới cập nhật
-      if (restaurant.TrangThaiHoatDong !== isOpen) {
-        restaurant.TrangThaiHoatDong = isOpen;
-        await restaurant.save();
+      // =========================================================================
+      // B. KIỂM TRA DỌN BÀN TỰ ĐỘNG (TRƯỚC GIỜ MỞ CỬA 10 PHÚT)
+      // =========================================================================
+      const gioMoCua = res.CauHinh.GioMoCua || "08:00";
+      const [h, m] = gioMoCua.split(":").map(Number);
 
-        console.log(
-          `⚙️ [CRON JOB - TỰ ĐỘNG] Chuyển trạng thái quán thành: ${isOpen ? "MỞ CỬA 🟢" : "ĐÓNG CỬA 🔴"} (Lúc ${currentTimeStr})`,
+      const openingDate = new Date(vnTime);
+      openingDate.setHours(h, m, 0, 0);
+
+      // Tính mốc thời gian dọn dẹp (Giờ mở cửa - 10 phút)
+      const cleanupThreshold = new Date(openingDate.getTime() - 10 * 60000);
+
+      // Nếu bây giờ trùng khớp với phút dọn dẹp (Ví dụ mở cửa 8:00 -> dọn lúc 7:50)
+      if (
+        vnTime.getHours() === cleanupThreshold.getHours() &&
+        vnTime.getMinutes() === cleanupThreshold.getMinutes()
+      ) {
+        const result = await Table.updateMany(
+          { TrangThai: { $ne: "Trống" } },
+          {
+            $set: {
+              TrangThai: "Trống",
+              OrderHienTaiId: null,
+              ThoiGianCho: null,
+            },
+          },
         );
+        if (result.modifiedCount > 0) {
+          if (global.io)
+            global.io.emit("tables_reset_all", {
+              message: "Chuẩn bị mở cửa, tất cả bàn đã được dọn sạch.",
+            });
+          console.log(
+            `🧹 [CRON] Đã dọn dẹp ${result.modifiedCount} bàn trước giờ mở cửa 10 phút.`,
+          );
+        }
+      }
 
-        // Bắn Socket để App Khách hàng & Web Admin tự đổi giao diện (Nếu bạn có cấu hình Socket)
-        if (global.io) {
-          global.io.emit("restaurant_status_changed", { isOpen });
+      // C. TỰ ĐỘNG CẬP NHẬT TRẠNG THÁI THEO GIỜ HÀNH CHÍNH (Nếu không có lệnh đóng cửa thủ công)
+      if (!res.TamNgungDen) {
+        const { GioMoCua, GioDongCua } = res.CauHinh;
+        // Logic kiểm tra giờ mở cửa (xử lý cả trường hợp mở xuyên đêm)
+        let shouldBeOpen =
+          GioMoCua < GioDongCua
+            ? curTimeStr >= GioMoCua && curTimeStr < GioDongCua
+            : curTimeStr >= GioMoCua || curTimeStr < GioDongCua;
+
+        if (res.TrangThaiHoatDong !== shouldBeOpen) {
+          res.TrangThaiHoatDong = shouldBeOpen;
+          await res.save();
+          if (global.io)
+            global.io.emit("restaurant_status_changed", {
+              isOpen: shouldBeOpen,
+            });
         }
       }
     } catch (error) {
-      console.error(
-        "❌ [CRON JOB] Lỗi khi tự động cập nhật đóng/mở cửa:",
-        error,
-      );
+      console.error("❌ [CRON] Lỗi trong tác vụ quản lý cửa hàng:", error);
     }
   });
 
-  console.log(
-    "⚙️  [CRON JOB] Hệ thống tác vụ tự động (Reset Món & Đóng/Mở cửa) đã được kích hoạt.",
-  );
+  // 3. Tác vụ dọn bàn "treo" (Khách quét QR quá 20 phút mà không đặt món)
+  cron.schedule("* * * * *", async () => {
+    try {
+      const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000);
+
+      const idleTables = await Table.find({
+        TrangThai: { $in: ["Có Khách", "Chờ thanh toán"] },
+        OrderHienTaiId: null,
+        ThoiGianCho: { $lte: twentyMinutesAgo },
+      });
+
+      if (idleTables.length > 0) {
+        for (let table of idleTables) {
+          table.TrangThai = "Trống";
+          table.ThoiGianCho = null;
+          await table.save();
+          if (global.io) global.io.emit("table_updated", table);
+          console.log(
+            `🧹 [CRON] Reset bàn treo do không gọi món: ${table.SoBan}`,
+          );
+        }
+      }
+    } catch (error) {
+      console.error("❌ [CRON] Lỗi dọn dẹp bàn treo:", error);
+    }
+  });
+
+  console.log("⚙️ [CRON] Hệ thống quản lý vận hành tự động đã sẵn sàng.");
 };
 
 module.exports = startCronJobs;

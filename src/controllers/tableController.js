@@ -25,6 +25,13 @@ const getTableById = async (req, res) => {
         .status(404)
         .json({ message: "Không tìm thấy thông tin bàn này." });
     }
+    if (table.TrangThai === "Trống") {
+      table.TrangThai = "Có Khách";
+      table.ThoiGianCho = new Date();
+      await table.save();
+
+      if (global.io) global.io.emit("table_updated", table);
+    }
 
     res.json({ message: 0, data: table });
   } catch (error) {
@@ -80,11 +87,18 @@ const updateTableInfo = async (req, res) => {
     }
 
     // Chỉ cho phép sửa thông tin khi bàn đang TRỐNG
-    if (table.TrangThai !== "Trống") {
-      return res.status(400).json({
-        message:
-          "Bàn đang có khách hoặc chờ thanh toán, không thể sửa thông tin.",
-      });
+    // if (table.TrangThai !== "Trống") {
+    //   return res.status(400).json({
+    //     message:
+    //       "Bàn đang có khách hoặc chờ thanh toán, không thể sửa thông tin.",
+    //   });
+    // }
+
+    // Quản lý có thể ép bàn về Trống bất cứ lúc nào
+    if (req.body.TrangThai === "Trống") {
+      table.TrangThai = "Trống";
+      table.OrderHienTaiId = null;
+      table.ThoiGianQuet = null;
     }
 
     // Cập nhật thông tin
@@ -115,6 +129,7 @@ const updateTableStatus = async (req, res) => {
     // Logic nghiệp vụ: Nếu chuyển về 'Trống', xóa liên kết đơn hàng hiện tại
     if (TrangThai === "Trống") {
       table.OrderHienTaiId = null;
+      table.ThoiGianCho = null;
     }
 
     const updatedTable = await table.save();

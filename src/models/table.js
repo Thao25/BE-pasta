@@ -11,7 +11,10 @@ const tableSchema = new mongoose.Schema(
       enum: ["Trống", "Có Khách", "Chờ thanh toán"],
       default: "Trống",
     },
-
+    ThoiGianCho: {
+      type: Date,
+      default: null,
+    },
     // Liên kết đến đơn hàng đang mở (nếu có)
     OrderHienTaiId: {
       type: mongoose.Schema.Types.ObjectId,

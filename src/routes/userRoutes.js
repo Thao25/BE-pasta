@@ -7,6 +7,7 @@ const {
   getUsers,
   updateUserRole,
   deleteUser,
+  loginZalo,
 } = require("../controllers/userController");
 
 // Đăng nhập quản trị
@@ -27,4 +28,6 @@ router.put("/:id/role", updateUserRole);
 // Thu hồi (Xóa) tài khoản nhân viên
 router.delete("/:id", deleteUser);
 
+// Đăng nhập từ Zalo
+router.post("/zalo", loginZalo);
 module.exports = router;

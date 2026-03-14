@@ -22,8 +22,14 @@ const restaurantSchema = new mongoose.Schema(
       GioMoCua: { type: String, default: "08:00" },
       GioDongCua: { type: String, default: "22:00" },
     },
+    // THÊM: Thời điểm tự động mở cửa lại
+    TamNgungDen: {
+      type: Date,
+      default: null,
+    },
+
     ThongTinNganHang: {
-      BankId: { type: String, default: "MB" },
+      BankId: { type: String, default: "" },
       AccountNo: { type: String, default: "" },
       AccountName: { type: String, default: "" },
     },

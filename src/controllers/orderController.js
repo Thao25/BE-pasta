@@ -1,6 +1,7 @@
 const Order = require("../models/order");
 const Table = require("../models/table");
 const Food = require("../models/Food");
+const Restaurant = require("../models/restaurant");
 
 // @desc    Tạo đơn hàng mới (Khách đặt món từ Zalo)
 // @route   POST /api/orders
@@ -14,7 +15,7 @@ const createOrder = async (req, res) => {
       return res.status(404).json({ message: "Bàn không tồn tại" });
     }
 
-    // 2. Tính toán lại giá tiền từ Server (để tránh Client hack giá)
+    // 2. Tính toán lại giá tiền từ Server
     let tongTien = 0;
     const processedItems = [];
 
@@ -31,12 +32,12 @@ const createOrder = async (req, res) => {
           giaDonVi += opt.Gia;
         });
       }
-
-      tongTien += giaDonVi * item.SoLuong;
+      const tongienMon = giaDonVi * item.SoLuong;
+      tongTien += tongienMon + phantramVAT * tongienMon;
 
       processedItems.push({
         FoodId: food._id,
-        TenMon: food.TenMon, // Lưu object song ngữ
+        TenMon: food.TenMon,
         SoLuong: item.SoLuong,
         GiaDonVi: giaDonVi,
         TuyChonDaChon: item.TuyChonDaChon,
@@ -60,6 +61,7 @@ const createOrder = async (req, res) => {
     // 4. Cập nhật trạng thái Bàn -> "Có Khách" & Gán Order ID
     table.TrangThai = "Có Khách";
     table.OrderHienTaiId = savedOrder._id;
+    table.ThoiGianCho = null; // Reset thời gian chờ
     await table.save();
 
     // 5. Bắn Socket thông báo Real-time cho Bếp/Thu ngân
@@ -113,7 +115,7 @@ const getOrderById = async (req, res) => {
   }
 };
 
-// @desc    Cập nhật trạng thái đơn hàng (Bếp làm xong, hoặc Thu ngân xác nhận trả tiền)
+// @desc    Cập nhật trạng thái đơn hàng (Bếp làm xong, Thu ngân xác nhận trả tiền)
 // @route   PUT /api/orders/:id
 const updateOrderStatus = async (req, res) => {
   try {
@@ -129,6 +131,17 @@ const updateOrderStatus = async (req, res) => {
       order.TrangThaiOrder = TrangThaiOrder;
     }
 
+    // --- LOGIC PHIÊN: Nếu trạng thái đơn hàng là 'DaPhucVu' (Phục vụ lên đủ món) ---
+    // Thì bàn đó sẽ tự động chuyển sang trạng thái 'ChoThanhToan'
+    if (TrangThaiOrder === "DaPhucVu") {
+      const table = await Table.findById(order.BanId);
+      if (table) {
+        table.TrangThai = "ChoThanhToan";
+        await table.save();
+        if (global.io) global.io.emit("table_updated", table);
+      }
+    }
+
     // Cập nhật thanh toán (Thu ngân)
     if (ThanhToan) {
       order.ThanhToan = { ...order.ThanhToan, ...ThanhToan };
@@ -142,6 +155,7 @@ const updateOrderStatus = async (req, res) => {
         if (table) {
           table.TrangThai = "Trống";
           table.OrderHienTaiId = null;
+          table.ThoiGianCho = null;
           await table.save();
 
           // Real-time cập nhật bàn
