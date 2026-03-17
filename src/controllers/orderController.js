@@ -3,41 +3,43 @@ const Table = require("../models/table");
 const Food = require("../models/Food");
 const Restaurant = require("../models/restaurant");
 
-// @desc    Tạo đơn hàng mới (Khách đặt món từ Zalo)
+// @desc    Tạo đơn hàng mới hoặc Gộp vào đơn hiện tại (Khách đặt món từ Zalo)
 // @route   POST /api/orders
 const createOrder = async (req, res) => {
   try {
     const { BanId, KhachHangZaloId, ChiTietMon } = req.body;
 
-    // 1. Kiểm tra bàn có tồn tại không
-    const table = await Table.findById(BanId);
+    // 1. Kiểm tra bàn và thông tin nhà hàng đồng thời
+    const [table, restaurant] = await Promise.all([
+      Table.findById(BanId),
+      Restaurant.findOne(),
+    ]);
+
     if (!table) {
       return res.status(404).json({ message: "Bàn không tồn tại" });
     }
-    const restaurant = await Restaurant.findOne();
+
     const vatRate = restaurant?.CauHinh?.PhanTramVAT || 0;
-    const phantramVAT = vatRate / 100;
-    // 2. Tính toán lại giá tiền từ Server
-    let tongTienChuaThue = 0;
-    const processedItems = [];
+
+    // 2. Tính toán các món mới gửi lên
+    let tongTienMoiChuaThue = 0;
+    const processedNewItems = [];
 
     for (const item of ChiTietMon) {
       const food = await Food.findById(item.FoodId);
-      if (!food) continue; // Bỏ qua nếu món không tồn tại
+      if (!food) continue;
 
-      // Snapshot dữ liệu (Lưu tên/giá tại thời điểm đặt)
       let giaDonVi = food.Gia;
-
-      // Cộng tiền Option (Size, Topping)
       if (item.TuyChonDaChon && item.TuyChonDaChon.length > 0) {
         item.TuyChonDaChon.forEach((opt) => {
-          giaDonVi += opt.Gia;
+          giaDonVi += Number(opt.Gia) || 0;
         });
       }
-      const tongienMon = giaDonVi * item.SoLuong;
-      tongTienChuaThue += tongienMon;
 
-      processedItems.push({
+      const thanhTienMon = giaDonVi * item.SoLuong;
+      tongTienMoiChuaThue += thanhTienMon;
+
+      processedNewItems.push({
         FoodId: food._id,
         TenMon: food.TenMon,
         SoLuong: item.SoLuong,
@@ -47,41 +49,68 @@ const createOrder = async (req, res) => {
         TrangThaiMon: "ChoBep",
       });
     }
-    const tienThue = (tongTienChuaThue * vatRate) / 100;
-    const tongTienCuoiCung = tongTienChuaThue + tienThue;
-    // 3. Tạo đơn hàng mới
-    const newOrder = new Order({
-      BanId,
-      KhachHangZaloId,
-      ChiTietMon: processedItems,
-      TongTien: Math.round(tongTienCuoiCung),
-      TrangThaiOrder: "ChoXuLy",
-      ThanhToan: {
-        TrangThai: "ChuaThanhToan",
-        PhanTramVAT: vatRate, // Lưu lại % VAT tại thời điểm đặt để đối soát
-      },
-    });
 
-    const savedOrder = await newOrder.save();
+    const thueMoi = (tongTienMoiChuaThue * vatRate) / 100;
+    const tongTienMoiCoThue = tongTienMoiChuaThue + thueMoi;
 
-    // 4. Cập nhật trạng thái Bàn -> "Có Khách" & Gán Order ID
-    table.TrangThai = "Có Khách";
-    table.OrderHienTaiId = savedOrder._id;
-    table.ThoiGianCho = null; // Reset thời gian chờ
-    await table.save();
+    let finalOrder;
 
-    // 5. Bắn Socket thông báo Real-time cho Bếp/Thu ngân
+    // 3. LOGIC GỘP ĐƠN: Kiểm tra nếu bàn đang có khách và có đơn hiện tại
+    if (table.TrangThai === "Có Khách" && table.OrderHienTaiId) {
+      const existingOrder = await Order.findById(table.OrderHienTaiId);
+
+      // Chỉ gộp nếu đơn hiện tại chưa thanh toán
+      if (
+        existingOrder &&
+        existingOrder.ThanhToan.TrangThai === "ChuaThanhToan"
+      ) {
+        existingOrder.ChiTietMon.push(...processedNewItems); // Gộp mảng món
+        existingOrder.TongTien += Math.round(tongTienMoiCoThue); // Cộng thêm tiền
+        finalOrder = await existingOrder.save();
+      }
+    }
+
+    // 4. LOGIC TẠO MỚI: Nếu không gộp được thì tạo đơn mới
+    if (!finalOrder) {
+      finalOrder = new Order({
+        BanId,
+        KhachHangZaloId,
+        ChiTietMon: processedNewItems,
+        TongTien: Math.round(tongTienMoiCoThue),
+        TrangThaiOrder: "ChoXuLy",
+        ThanhToan: {
+          TrangThai: "ChuaThanhToan",
+          PhanTramVAT: vatRate,
+        },
+      });
+
+      await finalOrder.save();
+
+      // Cập nhật trạng thái bàn cho khách mới
+      table.TrangThai = "Có Khách";
+      table.OrderHienTaiId = finalOrder._id;
+      table.ThoiGianCho = null;
+      await table.save();
+    }
+
+    // 5. Bắn Socket thông báo Real-time
     if (global.io) {
-      global.io.emit("new_order", savedOrder);
+      // Nếu là gộp đơn, bắn event 'update_order', nếu tạo mới bắn 'new_order'
+      const eventName =
+        table.OrderHienTaiId.toString() === finalOrder._id.toString()
+          ? "update_order"
+          : "new_order";
+      global.io.emit(eventName, finalOrder);
       global.io.emit("table_updated", table);
     }
 
-    res.status(201).json({ message: 0, data: savedOrder });
+    res.status(201).json({ message: 0, data: finalOrder });
   } catch (error) {
-    res.status(400).json({ message: "Lỗi tạo đơn hàng", error: error.message });
+    res
+      .status(400)
+      .json({ message: "Lỗi xử lý đơn hàng", error: error.message });
   }
 };
-
 // @desc    Lấy danh sách đơn hàng (Có lọc theo trạng thái)
 // @route   GET /api/orders
 const getOrders = async (req, res) => {
