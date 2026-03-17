@@ -3,25 +3,22 @@ const Table = require("../models/table");
 const Food = require("../models/Food");
 const Restaurant = require("../models/restaurant");
 
-// @desc    Tạo đơn hàng mới hoặc Gộp vào đơn hiện tại (Khách đặt món từ Zalo)
+// @desc    Tạo đơn hàng mới hoặc Gộp vào đơn hiện tại
 // @route   POST /api/orders
 const createOrder = async (req, res) => {
   try {
     const { BanId, KhachHangZaloId, ChiTietMon } = req.body;
 
-    // 1. Kiểm tra bàn và thông tin nhà hàng đồng thời
     const [table, restaurant] = await Promise.all([
       Table.findById(BanId),
       Restaurant.findOne(),
     ]);
 
-    if (!table) {
-      return res.status(404).json({ message: "Bàn không tồn tại" });
-    }
+    if (!table) return res.status(404).json({ message: "Bàn không tồn tại" });
 
     const vatRate = restaurant?.CauHinh?.PhanTramVAT || 0;
 
-    // 2. Tính toán các món mới gửi lên
+    // 1. Xử lý danh sách món mới gọi
     let tongTienMoiChuaThue = 0;
     const processedNewItems = [];
 
@@ -29,48 +26,57 @@ const createOrder = async (req, res) => {
       const food = await Food.findById(item.FoodId);
       if (!food) continue;
 
-      let giaDonVi = food.Gia;
+      // Giá gốc của món ăn từ Database
+      let giaGocMon = food.Gia;
+      let giaOption = 0;
+
+      // Tính tổng tiền các option
       if (item.TuyChonDaChon && item.TuyChonDaChon.length > 0) {
         item.TuyChonDaChon.forEach((opt) => {
-          giaDonVi += Number(opt.Gia) || 0;
+          giaOption += Number(opt.Gia) || 0;
         });
       }
 
-      const thanhTienMon = giaDonVi * item.SoLuong;
+      // Giá đơn vị cuối cùng cho item này (Gồm món + topping)
+      const giaCuoiCungCuaItem = giaGocMon + giaOption;
+      const thanhTienItem = giaCuoiCungCuaItem * item.SoLuong;
+
       tongTienMoiChuaThue += thanhTienMon;
 
       processedNewItems.push({
         FoodId: food._id,
-        TenMon: food.TenMon,
+        TenMon: food.TenMon, // Lưu lại snapshot tên món
         SoLuong: item.SoLuong,
-        GiaDonVi: giaDonVi,
+        GiaDonVi: giaCuoiCungCuaItem, // Đã bao gồm option để sau này in hóa đơn dễ tính
         TuyChonDaChon: item.TuyChonDaChon,
         GhiChu: item.GhiChu,
         TrangThaiMon: "ChoBep",
       });
     }
 
+    // Tính thuế trên phần món mới gọi thêm
     const thueMoi = (tongTienMoiChuaThue * vatRate) / 100;
     const tongTienMoiCoThue = tongTienMoiChuaThue + thueMoi;
 
     let finalOrder;
 
-    // 3. LOGIC GỘP ĐƠN: Kiểm tra nếu bàn đang có khách và có đơn hiện tại
+    // 2. Kiểm tra gộp đơn
     if (table.TrangThai === "Có Khách" && table.OrderHienTaiId) {
       const existingOrder = await Order.findById(table.OrderHienTaiId);
 
-      // Chỉ gộp nếu đơn hiện tại chưa thanh toán
       if (
         existingOrder &&
         existingOrder.ThanhToan.TrangThai === "ChuaThanhToan"
       ) {
-        existingOrder.ChiTietMon.push(...processedNewItems); // Gộp mảng món
-        existingOrder.TongTien += Math.round(tongTienMoiCoThue); // Cộng thêm tiền
+        // GỘP: Đẩy món mới vào mảng hiện tại
+        existingOrder.ChiTietMon.push(...processedNewItems);
+        // CỘNG DỒN: Tổng tiền cũ + (Tiền món mới + thuế mới)
+        existingOrder.TongTien += Math.round(tongTienMoiCoThue);
         finalOrder = await existingOrder.save();
       }
     }
 
-    // 4. LOGIC TẠO MỚI: Nếu không gộp được thì tạo đơn mới
+    // 3. Tạo mới nếu không có đơn để gộp
     if (!finalOrder) {
       finalOrder = new Order({
         BanId,
@@ -85,22 +91,14 @@ const createOrder = async (req, res) => {
       });
 
       await finalOrder.save();
-
-      // Cập nhật trạng thái bàn cho khách mới
       table.TrangThai = "Có Khách";
       table.OrderHienTaiId = finalOrder._id;
-      table.ThoiGianCho = null;
       await table.save();
     }
 
-    // 5. Bắn Socket thông báo Real-time
+    // 4. Socket thông báo cập nhật
     if (global.io) {
-      // Nếu là gộp đơn, bắn event 'update_order', nếu tạo mới bắn 'new_order'
-      const eventName =
-        table.OrderHienTaiId.toString() === finalOrder._id.toString()
-          ? "update_order"
-          : "new_order";
-      global.io.emit(eventName, finalOrder);
+      global.io.emit("update_order", finalOrder);
       global.io.emit("table_updated", table);
     }
 
