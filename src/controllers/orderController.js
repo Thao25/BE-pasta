@@ -2,9 +2,6 @@ const Order = require("../models/order");
 const Table = require("../models/table");
 const Food = require("../models/Food");
 const Restaurant = require("../models/restaurant");
-
-// @desc    Tạo đơn hàng mới hoặc Gộp vào đơn hiện tại
-// @route   POST /api/orders
 const createOrder = async (req, res) => {
   try {
     const { BanId, KhachHangZaloId, ChiTietMon } = req.body;
@@ -15,10 +12,9 @@ const createOrder = async (req, res) => {
     ]);
 
     if (!table) return res.status(404).json({ message: "Bàn không tồn tại" });
-
     const vatRate = restaurant?.CauHinh?.PhanTramVAT || 0;
 
-    // 1. Xử lý danh sách món mới gọi
+    // 1. Xử lý danh sách món mới
     let tongTienMoiChuaThue = 0;
     const processedNewItems = [];
 
@@ -26,57 +22,51 @@ const createOrder = async (req, res) => {
       const food = await Food.findById(item.FoodId);
       if (!food) continue;
 
-      // Giá gốc của món ăn từ Database
-      let giaGocMon = food.Gia;
-      let giaOption = 0;
+      // CHỈ LẤY GIÁ GỐC MÓN
+      const giaGocMon = food.Gia;
+      let tongTienOptions = 0;
 
-      // Tính tổng tiền các option
+      // Tính riêng tiền options
       if (item.TuyChonDaChon && item.TuyChonDaChon.length > 0) {
         item.TuyChonDaChon.forEach((opt) => {
-          giaOption += Number(opt.Gia) || 0;
+          tongTienOptions += Number(opt.Gia) || 0;
         });
       }
 
-      // Giá đơn vị cuối cùng cho item này (Gồm món + topping)
-      const giaCuoiCungCuaItem = giaGocMon + giaOption;
-      const thanhTienItem = giaCuoiCungCuaItem * item.SoLuong;
-
-      tongTienMoiChuaThue += thanhTienMon;
+      // Tổng tiền của item = (Giá gốc + Tổng giá các option) * Số lượng
+      const thanhTienCuaItemNay = (giaGocMon + tongTienOptions) * item.SoLuong;
+      tongTienMoiChuaThue += thanhTienCuaItemNay;
 
       processedNewItems.push({
         FoodId: food._id,
-        TenMon: food.TenMon, // Lưu lại snapshot tên món
+        TenMon: food.TenMon,
         SoLuong: item.SoLuong,
-        GiaDonVi: giaCuoiCungCuaItem, // Đã bao gồm option để sau này in hóa đơn dễ tính
-        TuyChonDaChon: item.TuyChonDaChon,
+        GiaDonVi: giaGocMon, // ✅ CHỈ LƯU GIÁ GỐC TẠI ĐÂY
+        TuyChonDaChon: item.TuyChonDaChon, // Chi tiết giá từng option đã nằm trong mảng này
         GhiChu: item.GhiChu,
         TrangThaiMon: "ChoBep",
       });
     }
 
-    // Tính thuế trên phần món mới gọi thêm
     const thueMoi = (tongTienMoiChuaThue * vatRate) / 100;
     const tongTienMoiCoThue = tongTienMoiChuaThue + thueMoi;
 
     let finalOrder;
 
-    // 2. Kiểm tra gộp đơn
+    // 2. Kiểm tra gộp đơn (Logic giữ nguyên)
     if (table.TrangThai === "Có Khách" && table.OrderHienTaiId) {
       const existingOrder = await Order.findById(table.OrderHienTaiId);
-
       if (
         existingOrder &&
         existingOrder.ThanhToan.TrangThai === "ChuaThanhToan"
       ) {
-        // GỘP: Đẩy món mới vào mảng hiện tại
         existingOrder.ChiTietMon.push(...processedNewItems);
-        // CỘNG DỒN: Tổng tiền cũ + (Tiền món mới + thuế mới)
         existingOrder.TongTien += Math.round(tongTienMoiCoThue);
         finalOrder = await existingOrder.save();
       }
     }
 
-    // 3. Tạo mới nếu không có đơn để gộp
+    // 3. Tạo mới nếu không gộp
     if (!finalOrder) {
       finalOrder = new Order({
         BanId,
@@ -89,17 +79,15 @@ const createOrder = async (req, res) => {
           PhanTramVAT: vatRate,
         },
       });
-
       await finalOrder.save();
+
       table.TrangThai = "Có Khách";
       table.OrderHienTaiId = finalOrder._id;
       await table.save();
     }
 
-    // 4. Socket thông báo cập nhật
     if (global.io) {
       global.io.emit("update_order", finalOrder);
-      global.io.emit("table_updated", table);
     }
 
     res.status(201).json({ message: 0, data: finalOrder });
