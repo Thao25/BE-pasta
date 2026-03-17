@@ -60,11 +60,6 @@ const getDateRange = (timeframe) => {
       startDate.setHours(0, 0, 0, 0);
       endDate.setHours(23, 59, 59, 999);
   }
-
-  // ✅ FIX TIMEZONE (UTC+7 -> UTC)
-  startDate = new Date(startDate.getTime() - 7 * 60 * 60 * 1000);
-  endDate = new Date(endDate.getTime() - 7 * 60 * 60 * 1000);
-
   return { startDate, endDate };
 };
 
