@@ -14,9 +14,11 @@ const createOrder = async (req, res) => {
     if (!table) {
       return res.status(404).json({ message: "Bàn không tồn tại" });
     }
-
+    const restaurant = await Restaurant.findOne();
+    const vatRate = restaurant?.CauHinh?.PhanTramVAT || 0;
+    const phantramVAT = vatRate / 100;
     // 2. Tính toán lại giá tiền từ Server
-    let tongTien = 0;
+    let tongTienChuaThue = 0;
     const processedItems = [];
 
     for (const item of ChiTietMon) {
@@ -33,7 +35,7 @@ const createOrder = async (req, res) => {
         });
       }
       const tongienMon = giaDonVi * item.SoLuong;
-      tongTien += tongienMon + phantramVAT * tongienMon;
+      tongTienChuaThue += tongienMon;
 
       processedItems.push({
         FoodId: food._id,
@@ -45,15 +47,19 @@ const createOrder = async (req, res) => {
         TrangThaiMon: "ChoBep",
       });
     }
-
+    const tienThue = (tongTienChuaThue * vatRate) / 100;
+    const tongTienCuoiCung = tongTienChuaThue + tienThue;
     // 3. Tạo đơn hàng mới
     const newOrder = new Order({
       BanId,
       KhachHangZaloId,
       ChiTietMon: processedItems,
-      TongTien: tongTien,
+      TongTien: Math.round(tongTienCuoiCung),
       TrangThaiOrder: "ChoXuLy",
-      ThanhToan: { TrangThai: "ChuaThanhToan" },
+      ThanhToan: {
+        TrangThai: "ChuaThanhToan",
+        PhanTramVAT: vatRate, // Lưu lại % VAT tại thời điểm đặt để đối soát
+      },
     });
 
     const savedOrder = await newOrder.save();

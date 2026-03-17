@@ -14,11 +14,10 @@ const foodSchema = new mongoose.Schema(
     AnhMinhHoa: { type: String },
     LoaiMon: {
       type: String,
-      default: "Món Chính",
     },
     Tags: [{ type: String }], // ["ngot", "lanh", "ca-phe"]
 
-    // Cấu hình Option (Size, Topping, Đường, Đá)
+    // Cấu hình Option (Size, Topping, Đường, Đá..)
     TuyChon: [
       {
         TenNhom: {

@@ -61,6 +61,7 @@ const orderSchema = new mongoose.Schema(
       },
       GhiChu: String, // Ví dụ: "CK Techcombank 100k"
       ThoiGian: Date,
+      PhanTramVAT: { type: Number },
     },
 
     NhanVienPhucVu: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

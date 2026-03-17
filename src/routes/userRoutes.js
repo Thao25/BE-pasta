@@ -29,5 +29,5 @@ router.put("/:id/role", updateUserRole);
 router.delete("/:id", deleteUser);
 
 // Đăng nhập từ Zalo
-router.post("/zalo", loginZalo);
+router.post("/zalo-login", loginZalo);
 module.exports = router;

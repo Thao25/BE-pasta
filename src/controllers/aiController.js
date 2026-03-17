@@ -227,11 +227,7 @@ const chatWithAI = async (req, res) => {
       Restaurant.findOne(),
     ]);
 
-    const info = restaurantInfo || {
-      TenNhaHang: "Pasta",
-      DiaChi: "HN",
-      CauHinh: {},
-    };
+    const info = restaurantInfo;
 
     let currentOrder = null;
     let orderContext = "Khách chưa có đơn hàng nào đang hoạt động.";
@@ -328,8 +324,8 @@ const recommendFood = async (req, res) => {
 
     // Logic Random dự phòng (Có tính toán loại món)
     const getRandomSmart = () => {
-      const drinks = foods.filter((f) => f.LoaiMon === "DoUong");
-      const mainDishes = foods.filter((f) => f.LoaiMon === "MonChinh");
+      const drinks = foods.filter((f) => f.KhuVucCheBien === "Bar");
+      const mainDishes = foods.filter((f) => f.KhuVucCheBien === "Bep");
 
       const rDrink = drinks[Math.floor(Math.random() * drinks.length)];
       const rFood = mainDishes[Math.floor(Math.random() * mainDishes.length)];
