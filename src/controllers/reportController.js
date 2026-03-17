@@ -8,19 +8,22 @@ const getDateRange = (timeframe) => {
   let endDate = new Date();
 
   switch (timeframe) {
-    case "day": // Hôm nay
+    case "day":
       startDate.setHours(0, 0, 0, 0);
       endDate.setHours(23, 59, 59, 999);
       break;
-    case "week": // Tuần này (Từ Thứ 2 đến Chủ nhật)
-      const day = now.getDay() || 7; // Get current day number, converting Sun(0) to 7
-      if (day !== 1) startDate.setHours(-24 * (day - 1)); // Lùi về thứ 2
+
+    case "week":
+      const day = now.getDay() || 7; // CN = 7
+      startDate.setDate(now.getDate() - (day - 1)); // về thứ 2
       startDate.setHours(0, 0, 0, 0);
+
       endDate = new Date(startDate);
       endDate.setDate(startDate.getDate() + 6);
       endDate.setHours(23, 59, 59, 999);
       break;
-    case "month": // Tháng này
+
+    case "month":
       startDate = new Date(now.getFullYear(), now.getMonth(), 1);
       endDate = new Date(
         now.getFullYear(),
@@ -32,7 +35,8 @@ const getDateRange = (timeframe) => {
         999,
       );
       break;
-    case "quarter": // Quý này
+
+    case "quarter":
       const quarter = Math.floor(now.getMonth() / 3);
       startDate = new Date(now.getFullYear(), quarter * 3, 1);
       endDate = new Date(
@@ -45,15 +49,21 @@ const getDateRange = (timeframe) => {
         999,
       );
       break;
-    case "year": // Năm nay
+
+    case "year":
       startDate = new Date(now.getFullYear(), 0, 1);
       endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
       break;
-    default: // Mặc định là tuần này
+
+    default:
       startDate.setDate(now.getDate() - 6);
       startDate.setHours(0, 0, 0, 0);
       endDate.setHours(23, 59, 59, 999);
   }
+
+  // ✅ FIX TIMEZONE (UTC+7 -> UTC)
+  startDate = new Date(startDate.getTime() - 7 * 60 * 60 * 1000);
+  endDate = new Date(endDate.getTime() - 7 * 60 * 60 * 1000);
 
   return { startDate, endDate };
 };
@@ -323,7 +333,7 @@ const exportDetailedReport = async (req, res) => {
           </tr>
             <tr>
             <td><b>Khách hàng mới:</b></td>
-            <td class="text-center"><b>${khachHangMoi} đơn</b></td>
+            <td class="text-center"><b>${khachHangMoi} khách hàng</b></td>
           </tr>
         </table>
 
@@ -359,10 +369,10 @@ const exportDetailedReport = async (req, res) => {
             <th style="width: 10px; text-align: center;">STT</th>
             <th style="width: 50px; text-align: center;">Mã Đơn</th>
             <th style="width: 180px; text-align: center;">Thời Gian</th>
-            <th style="width: 120px; text-align: center;">Vị Trí Bàn</th>
+            <th style="width: 200px; text-align: center;">Vị Trí Bàn</th>
             <th style="width: 350px; text-align: center;">Chi Tiết Đơn Hàng</th>
-            <th style="width: 200px; text-align: center;">Thanh Toán </th>
-            <th style="width: 180px; text-align: center;">Hình Thức TT</th>
+            <th style="width: 300px; text-align: center;">Thanh Toán </th>
+            <th style="width: 200px; text-align: center;">Hình Thức TT</th>
           </tr>
           ${
             orders.length > 0
