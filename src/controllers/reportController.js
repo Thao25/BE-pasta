@@ -247,6 +247,10 @@ const exportDetailedReport = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
+    const khachHangMoi = await User.countDocuments({
+      Role: "KhachHang",
+      createdAt: { $gte: startDate, $lte: endDate },
+    });
     let tongDoanhThu = 0;
     let tongDonHang = orders.length;
     const thongKeMon = {};
