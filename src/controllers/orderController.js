@@ -195,10 +195,27 @@ const updateOrderStatus = async (req, res) => {
     res.status(400).json({ message: "Lỗi cập nhật", error: error.message });
   }
 };
+// @desc    Lấy lịch sử đơn hàng của khách hàng
+// @route   GET /api/orders/history/:zaloId
+const getOrderHistory = async (req, res) => {
+  try {
+    const { zaloId } = req.params;
 
+    const orders = await Order.find({ KhachHangZaloId: zaloId })
+      .populate("BanId", "SoBan KhuVuc") // Để hiển thị khách ngồi bàn nào
+      .sort({ createdAt: -1 }); // Mới nhất lên đầu
+
+    res.status(200).json({ message: 0, data: orders });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Lỗi lấy lịch sử đơn hàng", error: error.message });
+  }
+};
 module.exports = {
   createOrder,
   getOrders,
   getOrderById,
   updateOrderStatus,
+  getOrderHistory,
 };
