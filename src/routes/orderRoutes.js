@@ -12,6 +12,8 @@ const {
   getOrdersForStaff,
 } = require("../controllers/orderController");
 
+// GET /api/orders/staff -> Lấy danh sách đơn hàng cho nhan viên
+router.route("/staff").get(getOrdersForStaff);
 // GET /api/orders -> Lấy danh sách (Bếp/Thu ngân dùng)
 router.route("/").get(getOrders);
 
@@ -35,8 +37,5 @@ router.route("/staff/:id").put(updateStaffOrderStatus);
 
 // PUT /api/orders/serve/:id -> Cập nhật trạng thái bán cho nhan viên
 router.route("/serve/:id").put(serverConfirmServed);
-
-// GET /api/orders/staff -> Lấy danh sách đơn hàng cho nhan viên
-router.route("/staff").get(getOrdersForStaff);
 
 module.exports = router;
