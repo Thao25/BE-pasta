@@ -5,8 +5,13 @@ const userSchema = new mongoose.Schema(
     HoTen: { type: String, required: true },
 
     // Dành cho Nhân viên
-    Username: { type: String, unique: true, sparse: true }, // sparse: true để cho phép null (trường hợp là khách)
-    Password: { type: String },
+    Username: { type: String, unique: true, sparse: true },
+    Password: {
+      type: String,
+      required: function () {
+        return this.Role !== "KhachHang";
+      },
+    },
     Role: {
       type: String,
       enum: ["QuanLy", "ThuNgan", "PhucVu", "Bep", "Bar", "KhachHang"],

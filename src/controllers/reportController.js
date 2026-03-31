@@ -1,7 +1,5 @@
 const Order = require("../models/order");
 const User = require("../models/User");
-
-// Hàm hỗ trợ tính toán khoảng thời gian (Start Date - End Date)
 const getDateRange = (timeframe) => {
   const now = new Date();
   let startDate = new Date();
@@ -14,8 +12,8 @@ const getDateRange = (timeframe) => {
       break;
 
     case "week":
-      const day = now.getDay() || 7; // CN = 7
-      startDate.setDate(now.getDate() - (day - 1)); // về thứ 2
+      const day = now.getDay() || 7;
+      startDate.setDate(now.getDate() - (day - 1));
       startDate.setHours(0, 0, 0, 0);
 
       endDate = new Date(startDate);
@@ -60,7 +58,14 @@ const getDateRange = (timeframe) => {
       startDate.setHours(0, 0, 0, 0);
       endDate.setHours(23, 59, 59, 999);
   }
-  return { startDate, endDate };
+
+  // ✅ convert VN -> UTC
+  const toUTC = (date) => new Date(date.getTime() - 7 * 60 * 60 * 1000);
+
+  return {
+    startDate: toUTC(startDate),
+    endDate: toUTC(endDate),
+  };
 };
 
 // @desc    Lấy dữ liệu thống kê Dashboard

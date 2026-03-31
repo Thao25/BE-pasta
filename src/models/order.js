@@ -32,7 +32,7 @@ const orderSchema = new mongoose.Schema(
         GhiChu: { type: String },
         TrangThaiMon: {
           type: String,
-          enum: ["ChoBep", "DangLam", "DaRaMon", "DaHuy"],
+          enum: ["ChoBep", "DangLam", "DaXong", "DaRaMon", "DaHuy"],
           default: "ChoBep",
         },
       },
@@ -43,7 +43,14 @@ const orderSchema = new mongoose.Schema(
     // Trạng thái tổng thể của đơn hàng
     TrangThaiOrder: {
       type: String,
-      enum: ["ChoXuLy", "DangCheBien", "DaPhucVu", "HoanTat", "DaHuy"],
+      enum: [
+        "ChoXuLy",
+        "DangCheBien",
+        "DaLamXong",
+        "DaPhucVu",
+        "HoanTat",
+        "DaHuy",
+      ],
       default: "ChoXuLy",
     },
 
@@ -59,7 +66,7 @@ const orderSchema = new mongoose.Schema(
         enum: ["TienMat", "ChuyenKhoan"],
         default: "TienMat",
       },
-      GhiChu: String, // Ví dụ: "CK Techcombank 100k"
+      GhiChu: String,
       ThoiGian: Date,
       PhanTramVAT: { type: Number },
     },

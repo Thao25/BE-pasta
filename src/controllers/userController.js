@@ -17,7 +17,11 @@ const loginUser = async (req, res) => {
 
     // 1. Tìm user theo username
     const user = await User.findOne({ Username: username });
-
+    if (!user) {
+      return res
+        .status(401)
+        .json({ message: 0, error: "Tài khoản không tồn tại" });
+    }
     // 2. Kiểm tra password (dùng bcrypt so sánh hash)
     if (user && (await bcrypt.compare(password, user.Password))) {
       res.json({

@@ -62,6 +62,7 @@ const createOrder = async (req, res) => {
       ) {
         existingOrder.ChiTietMon.push(...processedNewItems);
         existingOrder.TongTien += Math.round(tongTienMoiCoThue);
+        existingOrder.TrangThaiOrder = "ChoXuLy"; //
         finalOrder = await existingOrder.save();
       }
     }
@@ -109,8 +110,7 @@ const getOrders = async (req, res) => {
       query.TrangThaiOrder = status;
     }
 
-    // Lọc theo ngày (Mặc định lấy hôm nay nếu cần)
-    // Code đơn giản lấy tất cả, sắp xếp mới nhất trước
+    // Lọc theo ngày (Mặc định lấy hôm nay nếu cần) sắp xếp mới nhất trước
     const orders = await Order.find(query)
       .populate("BanId", "SoBan KhuVuc") // Lấy thêm tên bàn
       .sort({ createdAt: -1 });
@@ -212,10 +212,172 @@ const getOrderHistory = async (req, res) => {
       .json({ message: "Lỗi lấy lịch sử đơn hàng", error: error.message });
   }
 };
+// @desc    Hủy đơn hàng (Chỉ dành cho đơn đang chờ xử lý)
+// @route   PATCH /api/orders/cancel/:id
+const cancelOrder = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+
+    if (!order)
+      return res.status(404).json({ message: "Không tìm thấy đơn hàng" });
+
+    // CHI KIỂM TRA: Nếu đơn chưa được bếp xác nhận mới cho hủy
+    if (order.TrangThaiOrder !== "ChoXuLy") {
+      return res
+        .status(400)
+        .json({ message: "Đơn hàng đã được chế biến, không thể hủy!" });
+    }
+
+    order.TrangThaiOrder = "DaHuy";
+    await order.save();
+
+    // Cập nhật lại bàn tương ứng để bàn đó trở về trạng thái trống
+    await Table.findByIdAndUpdate(order.BanId, {
+      TrangThai: "Trống",
+      OrderHienTaiId: null,
+    });
+
+    if (global.io) {
+      global.io.emit("order_cancelled", order);
+    }
+
+    res.status(200).json({ message: 0, data: order });
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi hệ thống", error: error.message });
+  }
+};
+
+const updateStaffOrderStatus = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { role, newStatus } = req.body; // role: "Bep"/"Bar", newStatus: "DangLam"/"DaXong"
+
+    const order = await Order.findById(orderId).populate("ChiTietMon.FoodId");
+    if (!order) return res.status(404).json({ message: "Không tìm thấy đơn" });
+
+    // 1. Nếu Bếp/Bar ấn "Bắt đầu làm" (DangLam) và đơn đang "ChoXuLy" -> Đổi thành "DangCheBien"
+    if (newStatus === "DangLam" && order.TrangThaiOrder === "ChoXuLy") {
+      order.TrangThaiOrder = "DangCheBien";
+    }
+
+    // 2. Cập nhật TrangThaiMon cho TẤT CẢ các món thuộc KhuVucCheBien của nhân viên đó
+    order.ChiTietMon.forEach((item) => {
+      if (item.FoodId?.KhuVucCheBien === role) {
+        // Chỉ cập nhật những món chưa xong hoặc chưa hủy
+        if (!["DaXong", "DaRaMon", "DaHuy"].includes(item.TrangThaiMon)) {
+          item.TrangThaiMon = newStatus;
+        }
+      }
+    });
+
+    // 3. KIỂM TRA TỔNG THỂ: Nếu TẤT CẢ các món trong toàn bộ đơn đã là "DaXong" hoặc "DaRaMon"
+    const isAllItemsDone = order.ChiTietMon.every((item) =>
+      ["DaXong", "DaRaMon", "DaHuy"].includes(item.TrangThaiMon),
+    );
+
+    if (isAllItemsDone) {
+      order.TrangThaiOrder = "DaLamXong";
+    }
+
+    const updatedOrder = await order.save();
+
+    // 4. Socket Real-time
+    if (global.io) {
+      // Đảm bảo đơn hàng gửi đi đã có thông tin bàn để các màn hình khác cập nhật UI
+      const orderForSocket = await Order.findById(order._id)
+        .populate("BanId", "SoBan KhuVuc")
+        .lean(); // Dùng lean để lấy object nhẹ hơn
+
+      global.io.emit("order_updated", orderForSocket);
+
+      // Thông báo riêng cho Phục vụ khi có món "DaXong"
+      if (newStatus === "DaXong") {
+        global.io.emit("notify_server_food_ready", {
+          orderId: order._id,
+          role: role, // "Bep" hoặc "Bar"
+          ban: orderForSocket.BanId,
+          message: `Món từ ${role} cho ${orderForSocket.BanId?.SoBan} đã sẵn sàng!`,
+        });
+      }
+    }
+
+    res.json({ message: 0, data: updatedOrder });
+  } catch (error) {
+    res.status(400).json({ message: "Lỗi", error: error.message });
+  }
+};
+
+// --- LOGIC MỚI: PHỤC VỤ XÁC NHẬN BƯNG MÓN ---
+const serverConfirmServed = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { role } = req.body; // Phục vụ bưng đồ của khu vực nào ("Bep" hoặc "Bar")
+
+    const order = await Order.findById(orderId).populate("ChiTietMon.FoodId");
+    if (!order) return res.status(404).json({ message: "Không tìm thấy đơn" });
+
+    // 1. Chuyển trạng thái các món "DaXong" thuộc khu vực đó thành "DaRaMon"
+    order.ChiTietMon.forEach((item) => {
+      if (
+        item.FoodId?.KhuVucCheBien === role &&
+        item.TrangThaiMon === "DaXong"
+      ) {
+        item.TrangThaiMon = "DaRaMon";
+      }
+    });
+
+    // 2. KIỂM TRA TỔNG THỂ: Nếu toàn bộ đơn đã là "DaRaMon" (hoặc DaHuy)
+    const isAllServed = order.ChiTietMon.every((item) =>
+      ["DaRaMon", "DaHuy"].includes(item.TrangThaiMon),
+    );
+
+    if (isAllServed) {
+      order.TrangThaiOrder = "DaPhucVu";
+
+      // Tự động chuyển bàn sang trạng thái "Chờ thanh toán"
+      const table = await Table.findById(order.BanId);
+      if (table) {
+        table.TrangThai = "Chờ thanh toán";
+        await table.save();
+        if (global.io) global.io.emit("table_updated", table);
+      }
+    }
+
+    const savedOrder = await order.save();
+    if (global.io) global.io.emit("order_updated", savedOrder);
+
+    res.json({ message: 0, data: savedOrder });
+  } catch (error) {
+    res.status(400).json({ message: "Lỗi", error: error.message });
+  }
+};
+
+const getOrdersForStaff = async (req, res) => {
+  try {
+    const { role } = req.query;
+
+    let query = {
+      TrangThaiOrder: { $in: ["ChoXuLy", "DangCheBien", "DaLamXong"] },
+    };
+
+    const orders = await Order.find(query)
+      .populate("BanId", "SoBan KhuVuc")
+      .populate("ChiTietMon.FoodId", "KhuVucCheBien")
+      .sort({ updatedAt: 1 }); //đơn cũ nhất lên trước
+
+    res.status(200).json({ success: true, data: orders });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 module.exports = {
   createOrder,
   getOrders,
   getOrderById,
   updateOrderStatus,
+  updateStaffOrderStatus,
+  serverConfirmServed,
+  cancelOrder,
   getOrderHistory,
+  getOrdersForStaff,
 };

@@ -6,6 +6,10 @@ const {
   getOrderById,
   updateOrderStatus,
   getOrderHistory,
+  cancelOrder,
+  updateStaffOrderStatus,
+  serverConfirmServed,
+  getOrdersForStaff,
 } = require("../controllers/orderController");
 
 // GET /api/orders -> Lấy danh sách (Bếp/Thu ngân dùng)
@@ -22,5 +26,17 @@ router.route("/:id").put(updateOrderStatus);
 
 // GET /api/orders/history/:zaloId -> Lấy lịch sử đơn hàng
 router.route("/history/:zaloId").get(getOrderHistory);
+
+// PUT /api/orders/cancel/:id -> Hủy đơn hàng
+router.route("/cancel/:id").put(cancelOrder);
+
+// PUT /api/orders/staff/:id -> Cập nhật trạng thái bán cho nhan viên
+router.route("/staff/:id").put(updateStaffOrderStatus);
+
+// PUT /api/orders/serve/:id -> Cập nhật trạng thái bán cho nhan viên
+router.route("/serve/:id").put(serverConfirmServed);
+
+// GET /api/orders/staff -> Lấy danh sách đơn hàng cho nhan viên
+router.route("/staff").get(getOrdersForStaff);
 
 module.exports = router;
