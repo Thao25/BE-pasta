@@ -361,8 +361,17 @@ const getOrdersForStaff = async (req, res) => {
     };
 
     const orders = await Order.find(query)
-      .populate("BanId", "SoBan KhuVuc")
-      .populate("ChiTietMon.FoodId", "KhuVucCheBien")
+      // .populate("BanId", "SoBan KhuVuc")
+      // .populate("ChiTietMon.FoodId", "KhuVucCheBien")
+      .populate({
+        path: "BanId",
+        select: "SoBan KhuVuc",
+      })
+      .populate({
+        path: "ChiTietMon.FoodId", // Đường dẫn vào Schema
+        model: "Food", // Tên model đã định nghĩa
+        select: "KhuVucCheBien",
+      })
       .sort({ updatedAt: 1 }); //đơn cũ nhất lên trước
 
     res.status(200).json({ success: true, data: orders });
