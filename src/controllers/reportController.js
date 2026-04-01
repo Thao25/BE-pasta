@@ -191,8 +191,36 @@ const getDashboardStats = async (req, res) => {
         });
       }
     } else if (timeframe === "quarter") {
+      const now = new Date();
+
+      // ✅ Tính tháng bắt đầu của quý (chuẩn)
+      const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3; // 0,3,6,9
+
+      // ⚠️ Override lại startDate & endDate cho chắc
+      const start = new Date(now.getFullYear(), quarterStartMonth, 1);
+      const end = new Date(
+        now.getFullYear(),
+        quarterStartMonth + 3,
+        0,
+        23,
+        59,
+        59,
+        999,
+      );
+
+      // ✅ convert sang UTC (giống logic của bạn)
+      const toUTC = (date) => new Date(date.getTime() - 7 * 60 * 60 * 1000);
+
+      const startUTC = toUTC(start);
+      const endUTC = toUTC(end);
+
       const monthlyStats = await Order.aggregate([
-        { $match: orderMatchCondition },
+        {
+          $match: {
+            createdAt: { $gte: startUTC, $lte: endUTC },
+            "ThanhToan.TrangThai": "DaThanhToan",
+          },
+        },
         {
           $group: {
             _id: {
@@ -206,14 +234,15 @@ const getDashboardStats = async (req, res) => {
         },
       ]);
 
-      const startMonth = startDate.getMonth() + 1;
+      const startMonth = quarterStartMonth + 1; // 1-12
       const maxRevenue = Math.max(...monthlyStats.map((m) => m.tien), 5000000);
 
       for (let i = 0; i < 3; i++) {
         const currentMonth = startMonth + i;
         const found = monthlyStats.find((m) => m._id === currentMonth);
+
         chartData.push({
-          thu: `Th${currentMonth}`,
+          thu: `T${currentMonth}`,
           tien: found ? found.tien : 0,
           max: maxRevenue,
         });
@@ -235,7 +264,7 @@ const getDashboardStats = async (req, res) => {
       for (let i = 1; i <= 12; i++) {
         const found = monthlyStats.find((m) => m._id === i);
         chartData.push({
-          thu: `Th${i}`,
+          thu: `T${i}`,
           tien: found ? found.tien : 0,
           max: maxRevenue,
         });
@@ -333,7 +362,7 @@ const exportDetailedReport = async (req, res) => {
       </head>
       <body>
         <div class="title">BÁO CÁO KẾT QUẢ KINH DOANH NHÀ HÀNG PASTA</div>
-        <div class="subtitle">Kỳ báo cáo: ${timeLabel} (Từ ${toVN(startDate).toLocaleDateString("vi-VN")} đến ${toVN(endDate).toLocaleDateString("vi-VN")})</div>
+        <div class="subtitle">Kỳ báo cáo: ${timeLabel} (Từ ${toVN(startDate).toLocaleDateString("vi-VN")} - đến ${toVN(endDate).toLocaleDateString("vi-VN")})</div>
         <div class="subtitle">Ngày xuất file:  ${toVN(new Date()).toLocaleString("vi-VN")}</div>
         
                      <h3   colspan="2" class="summary-box">TỔNG QUAN KINH DOANH</h3>
