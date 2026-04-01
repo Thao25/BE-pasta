@@ -118,6 +118,7 @@ const getDashboardStats = async (req, res) => {
               $multiply: ["$ChiTietMon.GiaDonVi", "$ChiTietMon.SoLuong"],
             },
           },
+          GiaDonVi: { $first: "$ChiTietMon.GiaDonVi" },
         },
       },
       { $sort: { sl: -1 } }, // Sắp xếp giảm dần theo số lượng
