@@ -132,7 +132,12 @@ const getDashboardStats = async (req, res) => {
         { $match: orderMatchCondition },
         {
           $group: {
-            _id: { $dayOfWeek: "$createdAt", timezone: "Asia/Ho_Chi_Minh" },
+            _id: {
+              $dayOfWeek: {
+                date: "$createdAt",
+                timezone: "Asia/Ho_Chi_Minh",
+              },
+            },
             tien: { $sum: "$TongTien" },
           },
         },
@@ -162,7 +167,12 @@ const getDashboardStats = async (req, res) => {
         { $match: orderMatchCondition },
         {
           $group: {
-            _id: { $dayOfMonth: "$createdAt", timezone: "Asia/Ho_Chi_Minh" },
+            _id: {
+              $dayOfMonth: {
+                date: "$createdAt",
+                timezone: "Asia/Ho_Chi_Minh",
+              },
+            },
             tien: { $sum: "$TongTien" },
           },
         },
@@ -185,7 +195,12 @@ const getDashboardStats = async (req, res) => {
         { $match: orderMatchCondition },
         {
           $group: {
-            _id: { $month: "$createdAt" },
+            _id: {
+              $month: {
+                date: "$createdAt",
+                timezone: "Asia/Ho_Chi_Minh",
+              },
+            },
             tien: { $sum: "$TongTien" },
           },
         },
