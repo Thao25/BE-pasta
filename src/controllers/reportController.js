@@ -223,7 +223,9 @@ const getDashboardStats = async (req, res) => {
         { $match: orderMatchCondition },
         {
           $group: {
-            _id: { $month: "$createdAt", timezone: "Asia/Ho_Chi_Minh" },
+            _id: {
+              $month: { date: "$createdAt", timezone: "Asia/Ho_Chi_Minh" },
+            },
             tien: { $sum: "$TongTien" },
           },
         },
