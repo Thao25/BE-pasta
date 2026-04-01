@@ -132,7 +132,7 @@ const getDashboardStats = async (req, res) => {
         { $match: orderMatchCondition },
         {
           $group: {
-            _id: { $dayOfWeek: "$createdAt" },
+            _id: { $dayOfWeek: "$createdAt", timezone: "Asia/Ho_Chi_Minh" },
             tien: { $sum: "$TongTien" },
           },
         },
@@ -162,7 +162,7 @@ const getDashboardStats = async (req, res) => {
         { $match: orderMatchCondition },
         {
           $group: {
-            _id: { $dayOfMonth: "$createdAt" },
+            _id: { $dayOfMonth: "$createdAt", timezone: "Asia/Ho_Chi_Minh" },
             tien: { $sum: "$TongTien" },
           },
         },
@@ -208,7 +208,7 @@ const getDashboardStats = async (req, res) => {
         { $match: orderMatchCondition },
         {
           $group: {
-            _id: { $month: "$createdAt" },
+            _id: { $month: "$createdAt", timezone: "Asia/Ho_Chi_Minh" },
             tien: { $sum: "$TongTien" },
           },
         },
@@ -296,7 +296,7 @@ const exportDetailedReport = async (req, res) => {
             : timeframe === "quarter"
               ? "Quý này"
               : "Năm nay";
-
+    const toVN = (date) => new Date(date.getTime() + 7 * 60 * 60 * 1000);
     const htmlContent = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
       <head>
@@ -316,8 +316,8 @@ const exportDetailedReport = async (req, res) => {
       </head>
       <body>
         <div class="title">BÁO CÁO KẾT QUẢ KINH DOANH NHÀ HÀNG PASTA</div>
-        <div class="subtitle">Kỳ báo cáo: ${timeLabel} (Từ ${startDate.toLocaleDateString("vi-VN")} đến ${endDate.toLocaleDateString("vi-VN")})</div>
-        <div class="subtitle">Ngày xuất file: ${new Date().toLocaleString("vi-VN")}</div>
+        <div class="subtitle">Kỳ báo cáo: ${timeLabel} (Từ ${toVN(startDate).toLocaleDateString("vi-VN")} đến ${toVN(endDate).toLocaleDateString("vi-VN")})</div>
+        <div class="subtitle">Ngày xuất file:  ${toVN(new Date()).toLocaleString("vi-VN")}</div>
         
                      <h3   colspan="2" class="summary-box">TỔNG QUAN KINH DOANH</h3>
 
@@ -398,6 +398,9 @@ const exportDetailedReport = async (req, res) => {
                         : "Chuyển khoản";
                     const ngayDat = new Date(order.createdAt).toLocaleString(
                       "vi-VN",
+                      {
+                        timeZone: "Asia/Ho_Chi_Minh",
+                      },
                     );
 
                     return `
