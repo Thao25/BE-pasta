@@ -255,8 +255,8 @@ const updateStaffOrderStatus = async (req, res) => {
     const order = await Order.findById(orderId).populate("ChiTietMon.FoodId");
     if (!order) return res.status(404).json({ message: "Không tìm thấy đơn" });
 
-    // 1. Nếu Bếp/Bar ấn "Bắt đầu làm" (DangLam) và đơn đang "ChoXuLy" -> Đổi thành "DangCheBien"
-    if (newStatus === "DangLam" && order.TrangThaiOrder === "ChoXuLy") {
+    // 1. Nếu Bếp/Bar ấn "Bắt đầu làm" (DangLam) và đơn   -> Đổi thành "DangCheBien"
+    if (newStatus === "DangLam") {
       order.TrangThaiOrder = "DangCheBien";
     }
 

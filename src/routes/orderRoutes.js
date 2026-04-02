@@ -33,8 +33,8 @@ router.route("/:id").put(updateOrderStatus);
 // PUT /api/orders/cancel/:id -> Hủy đơn hàng
 router.route("/cancel/:id").put(cancelOrder);
 
-// PUT /api/orders/staff/:id -> Cập nhật trạng thái bán cho nhan viên
-router.route("/staff/:id").put(updateStaffOrderStatus);
+// PUT /api/orders/staff/:orderId -> Cập nhật trạng thái bán cho nhan viên
+router.route("/staff/:orderId").put(updateStaffOrderStatus);
 
 // PUT /api/orders/serve/:id -> Cập nhật trạng thái bán cho nhan viên
 router.route("/serve/:id").put(serverConfirmServed);
