@@ -307,24 +307,29 @@ const updateStaffOrderStatus = async (req, res) => {
   }
 };
 
-// --- LOGIC MỚI: PHỤC VỤ XÁC NHẬN BƯNG MÓN ---
+//  PHỤC VỤ XÁC NHẬN BƯNG MÓN ---
 const serverConfirmServed = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { role } = req.body; // Phục vụ bưng đồ của khu vực nào ("Bep" hoặc "Bar")
+    const { itemId } = req.body;
 
     const order = await Order.findById(orderId).populate("ChiTietMon.FoodId");
     if (!order) return res.status(404).json({ message: "Không tìm thấy đơn" });
 
-    // 1. Chuyển trạng thái các món "DaXong" thuộc khu vực đó thành "DaRaMon"
+    // 1. CHỈ CẬP NHẬT MÓN ĐƯỢC CLICK
+    let itemFound = false;
     order.ChiTietMon.forEach((item) => {
-      if (
-        item.FoodId?.KhuVucCheBien === role &&
-        item.TrangThaiMon === "DaXong"
-      ) {
+      // So sánh ID của item trong mảng ChiTietMon
+      if (item._id.toString() === itemId) {
         item.TrangThaiMon = "DaRaMon";
+        itemFound = true;
       }
     });
+
+    if (!itemFound)
+      return res
+        .status(400)
+        .json({ message: "Không tìm thấy món này trong đơn" });
 
     // 2. KIỂM TRA TỔNG THỂ: Nếu toàn bộ đơn đã là "DaRaMon" (hoặc DaHuy)
     const isAllServed = order.ChiTietMon.every((item) =>
@@ -334,10 +339,9 @@ const serverConfirmServed = async (req, res) => {
     if (isAllServed) {
       order.TrangThaiOrder = "DaPhucVu";
 
-      // Tự động chuyển bàn sang trạng thái "Chờ thanh toán"
       const table = await Table.findById(order.BanId);
       if (table) {
-        table.TrangThai = "Chờ thanh toán";
+        table.TrangThai = "Chờ thanh toán"; // Đồng bộ với database của bạn
         await table.save();
         if (global.io) global.io.emit("table_updated", table);
       }
@@ -351,7 +355,6 @@ const serverConfirmServed = async (req, res) => {
     res.status(400).json({ message: "Lỗi", error: error.message });
   }
 };
-
 const getOrdersForStaff = async (req, res) => {
   try {
     const { role } = req.query;
