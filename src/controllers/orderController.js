@@ -365,7 +365,34 @@ const getOrdersForStaff = async (req, res) => {
       .populate("ChiTietMon.FoodId", "KhuVucCheBien")
       .sort({ updatedAt: 1 }); //đơn cũ nhất lên trước
 
-    res.status(200).json({ success: true, data: orders });
+    for (let order of orders) {
+      let displayItems = [];
+
+      for (let item of order.ChiTietMon) {
+        // Tìm thông tin món ăn để biết khu vực chế biến
+        const foodData = await Food.findById(item.FoodId)
+          .select("KhuVucCheBien")
+          .lean();
+
+        if (foodData) {
+          item.FoodId = foodData; // Gán data vào để App dùng (nếu cần)
+
+          if (role === "PhucVu") {
+            // ROLE PHỤC VỤ: Thấy tất cả các món để biết tiến độ bàn đó
+            displayItems.push(item);
+          } else if (foodData.KhuVucCheBien === role) {
+            // ROLE BẾP/BAR: Chỉ thấy món thuộc khu vực mình
+            displayItems.push(item);
+          }
+        }
+      }
+      order.ChiTietMon = displayItems;
+    }
+
+    // Chỉ trả về những đơn hàng có món cần hiển thị
+    const finalData = orders.filter((order) => order.ChiTietMon.length > 0);
+
+    res.status(200).json({ success: true, message: 0, data: finalData });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
