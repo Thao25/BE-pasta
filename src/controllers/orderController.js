@@ -55,8 +55,9 @@ const createOrder = async (req, res) => {
 
     // 2. Kiểm tra gộp đơn (Logic giữ nguyên)
     if (
-      table.TrangThai === "Có Khách" ||
-      (table.TrangThai === "ChoThanhToan" && table.OrderHienTaiId)
+      (table.TrangThai === "Có Khách" ||
+        table.TrangThai === "Chờ thanh toán") &&
+      table.OrderHienTaiId
     ) {
       const existingOrder = await Order.findById(table.OrderHienTaiId);
       if (
