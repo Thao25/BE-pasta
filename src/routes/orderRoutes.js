@@ -10,10 +10,14 @@ const {
   updateStaffOrderStatus,
   serverConfirmServed,
   getOrdersForStaff,
+  getOrdersToday,
 } = require("../controllers/orderController");
 
 // GET /api/orders/staff -> Lấy danh sách đơn hàng cho nhan viên
 router.route("/staff").get(getOrdersForStaff);
+
+// GET /api/orders/today -> Lấy danh sách đơn hàng hôm nay
+router.get("/today", getOrdersToday);
 
 // GET /api/orders/history/:zaloId -> Lấy lịch sử đơn hàng
 router.route("/history/:zaloId").get(getOrderHistory);

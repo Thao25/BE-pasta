@@ -2,6 +2,7 @@ const Order = require("../models/order");
 const Table = require("../models/table");
 const Food = require("../models/Food");
 const Restaurant = require("../models/restaurant");
+const moment = require("moment-timezone");
 const createOrder = async (req, res) => {
   try {
     const { BanId, KhachHangZaloId, ChiTietMon } = req.body;
@@ -67,6 +68,7 @@ const createOrder = async (req, res) => {
         existingOrder.ChiTietMon.push(...processedNewItems);
         existingOrder.TongTien += Math.round(tongTienMoiCoThue);
         existingOrder.TrangThaiOrder = "ChoXuLy"; //
+        existingOrder.TrangThai = "Có Khách"; // Đảm bảo trạng thái bàn vẫn là Có Khách
         finalOrder = await existingOrder.save();
       }
     }
@@ -404,10 +406,49 @@ const getOrdersForStaff = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+const getOrdersToday = async (req, res) => {
+  try {
+    // 1. Lấy thời điểm hiện tại theo múi giờ Việt Nam
+    const nowVN = moment().tz("Asia/Ho_Chi_Minh");
+
+    // 2. Xác định điểm bắt đầu ngày (00:00:00) và kết thúc ngày (23:59:59) của VN
+    // Sau đó .toDate() sẽ tự động chuyển về định dạng UTC mà MongoDB hiểu
+    const startOfDay = nowVN.clone().startOf("day").toDate();
+    const endOfDay = nowVN.clone().endOf("day").toDate();
+
+    console.log("Tìm đơn từ (UTC):", startOfDay);
+    console.log("Đến (UTC):", endOfDay);
+
+    const orders = await Order.find({
+      createdAt: { $gte: startOfDay, $lte: endOfDay },
+    })
+      .populate("BanId", "SoBan KhuVuc")
+      .sort({ createdAt: -1 });
+
+    // Tính tổng doanh thu
+    const totalRevenue = orders
+      .filter((o) => o.ThanhToan.TrangThai === "DaThanhToan")
+      .reduce((sum, o) => sum + (o.TongTien || 0), 0);
+
+    res.status(200).json({
+      success: true,
+      message: 0,
+      data: orders,
+      summary: {
+        totalOrders: orders.length,
+        totalRevenue: totalRevenue,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 module.exports = {
   createOrder,
   getOrders,
   getOrderById,
+  getOrdersToday,
   updateOrderStatus,
   updateStaffOrderStatus,
   serverConfirmServed,
