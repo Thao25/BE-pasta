@@ -177,18 +177,26 @@ const resetTableCall = async (req, res) => {
 // GET /api/tables/calling
 const getCallingTables = async (req, res) => {
   try {
-    const callingTables = await Table.find({ DangGoiNhanVien: true });
+    // THÊM .lean() ở đây
+    const callingTables = await Table.find({ DangGoiNhanVien: true }).lean();
 
-    const formattedNotis = callingTables.map((t) => ({
-      id: t._id ? String(t._id) : Math.random().toString(),
-      tableId: t._id ? String(t._id) : "",
-      title: `Khách hàng ${t.SoBan} đang gọi!`,
-      body: t.YeuCauGanNhat || "Cần hỗ trợ",
-      status: "pending",
-    }));
+    console.log("Dữ liệu từ DB:", callingTables); // Xem log ở terminal Backend nhé
+
+    const formattedNotis = callingTables.map((t) => {
+      const safeId = t._id ? String(t._id) : Math.random().toString();
+
+      return {
+        id: safeId,
+        tableId: safeId,
+        title: `Khách hàng ${t.SoBan || "ẩn danh"} đang gọi!`,
+        body: t.YeuCauGanNhat || "Cần hỗ trợ",
+        status: "pending",
+      };
+    });
 
     res.json({ success: true, data: formattedNotis });
   } catch (err) {
+    console.error("Lỗi getCallingTables:", err);
     res.status(500).json({ success: false });
   }
 };
