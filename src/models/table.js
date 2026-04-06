@@ -21,6 +21,16 @@ const tableSchema = new mongoose.Schema(
       ref: "Order",
       default: null,
     },
+
+    DangGoiNhanVien: {
+      type: Boolean,
+      default: false,
+    },
+
+    YeuCauGanNhat: {
+      type: String,
+      default: "",
+    },
   },
   {
     timestamps: true,

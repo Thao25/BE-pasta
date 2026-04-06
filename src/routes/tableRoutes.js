@@ -6,6 +6,7 @@ const {
   createTable,
   updateTableInfo,
   updateTableStatus,
+  resetTableCall,
 } = require("../controllers/tableController");
 
 // GET /api/tables -> Lấy danh sách
@@ -22,5 +23,8 @@ router.route("/:id").put(updateTableInfo);
 
 // PUT /api/tables/status/:id -> Cập nhật trạng thái bàn
 router.route("/status/:id").put(updateTableStatus);
+
+// PUT /api/tables/:id/reset-call -> Reset trạng thái gọi nhân viên
+router.route("/:id/reset-call").put(resetTableCall);
 
 module.exports = router;

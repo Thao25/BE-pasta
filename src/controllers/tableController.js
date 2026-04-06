@@ -143,6 +143,37 @@ const updateTableStatus = async (req, res) => {
       .json({ message: "Lỗi cập nhật trạng thái", error: error.message });
   }
 };
+// @desc    Reset trạng thái gọi nhân viên của bàn
+// @route   PUT /api/tables/:id/reset-call
+// @access  Private (Nhân viên)
+const resetTableCall = async (req, res) => {
+  try {
+    const tableId = req.params.id;
+
+    const table = await Table.findByIdAndUpdate(
+      tableId,
+      {
+        DangGoiNhanVien: false,
+        YeuCauGanNhat: "",
+      },
+      { new: true },
+    );
+
+    if (!table) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Không tìm thấy bàn" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Đã xử lý yêu cầu phục vụ",
+      data: table,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 module.exports = {
   getTables,
@@ -150,4 +181,5 @@ module.exports = {
   createTable,
   updateTableInfo,
   updateTableStatus,
+  resetTableCall,
 };

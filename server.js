@@ -4,44 +4,65 @@ const cors = require("cors");
 const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
+const Table = require("./src/models/table");
 const startCronJobs = require("./src/controllers/cronService");
 
-// Tải các biến môi trường từ .env file
 dotenv.config({ path: "./.env" });
 
-// Cập nhật đường dẫn để kết nối đến config/db.js bên trong src
 const connectDB = require("./src/config/db");
-
-// Kết nối đến cơ sở dữ liệu MongoDB
 connectDB();
 
 const app = express();
 const server = http.createServer(app);
+app.use(express.json());
+app.use(cors());
 
-// Middleware
-app.use(express.json()); // Cho phép server chấp nhận dữ liệu JSON trong body
-app.use(cors()); // Cho phép tất cả các nguồn gốc (Web, App, Zalo) truy cập API
-
-//  Socket.io Setup (Real-time)
 const io = new Server(server, {
   cors: {
-    origin: "*", // Cho phép mọi nguồn (Zalo App, Web Admin) kết nối socket
+    origin: "*",
     methods: ["GET", "POST"],
   },
 });
 
-io.on("connection", (socket) => {
-  console.log("User connected socket:", socket.id);
+global.io = io;
 
+io.on("connection", (socket) => {
+  console.log("Thiết bị mới kết nối:", socket.id);
+
+  socket.on("customer-call", async (data) => {
+    try {
+      await Table.findOneAndUpdate(
+        { _id: data.tableId },
+        { DangGoiNhanVien: true, YeuCauGanNhat: data.noiDung },
+      );
+
+      // 2. Bắn thông báo Real-time
+      io.emit("new-notification", {
+        id: Date.now(),
+        tableId: data.tableId,
+        title: `Khách hàng ${data.soBan} đang gọi!`,
+        body: data.noiDung || "Yêu cầu nhân viên hỗ trợ",
+        status: "pending",
+      });
+    } catch (err) {
+      console.error("Lỗi xử lý gọi món:", err);
+    }
+  });
+
+  socket.on("staff-respond", async (data) => {
+    await Table.findByIdAndUpdate(data.tableId, { DangGoiNhanVien: false });
+
+    io.emit("receive-response", {
+      tableId: data.tableId,
+      message: "Nhân viên đang đến, vui lòng đợi chút nhé!",
+    });
+    io.emit("call-handled", { tableId: data.tableId });
+  });
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
   });
 });
 
-// Biến toàn cục cho socket
-global.io = io;
-
-// Định tuyến API
 app.get("/", (req, res) => {
   res.send("API Đang hoạt động...");
 });
@@ -61,7 +82,7 @@ app.use("/uploads", express.static(path.join(__dirname, "/uploads")));
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(
+server.listen(
   PORT,
   console.log(`Server chạy ở chế độ Development trên cổng ${PORT}`),
 );
