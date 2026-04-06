@@ -30,6 +30,7 @@ io.on("connection", (socket) => {
   console.log("Thiết bị mới kết nối:", socket.id);
 
   socket.on("customer-call", async (data) => {
+    console.log("Dữ liệu nhận từ Zalo:", data);
     try {
       await Table.findOneAndUpdate(
         { _id: data.tableId },
@@ -40,7 +41,7 @@ io.on("connection", (socket) => {
       io.emit("new-notification", {
         id: Date.now(),
         tableId: data.tableId,
-        title: `Khách hàng ${data.soBan} đang gọi!`,
+        title: `Khách hàng ${data.banId} đang gọi!`,
         body: data.noiDung || "Yêu cầu nhân viên hỗ trợ",
         status: "pending",
       });
