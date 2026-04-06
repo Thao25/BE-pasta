@@ -174,7 +174,24 @@ const resetTableCall = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+// GET /api/tables/calling
+const getCallingTables = async (req, res) => {
+  try {
+    const callingTables = await Table.find({ DangGoiNhanVien: true });
 
+    const formattedNotis = callingTables.map((t) => ({
+      id: t._id,
+      tableId: t._id,
+      title: `Khách hàng ${t.SoBan} đang gọi!`,
+      body: t.YeuCauGanNhat || "Cần hỗ trợ",
+      status: "pending",
+    }));
+
+    res.json({ success: true, data: formattedNotis });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+};
 module.exports = {
   getTables,
   getTableById,
@@ -182,4 +199,5 @@ module.exports = {
   updateTableInfo,
   updateTableStatus,
   resetTableCall,
+  getCallingTables,
 };

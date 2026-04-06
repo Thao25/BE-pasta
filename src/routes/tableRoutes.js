@@ -7,7 +7,11 @@ const {
   updateTableInfo,
   updateTableStatus,
   resetTableCall,
+  getCallingTables,
 } = require("../controllers/tableController");
+
+// GET /api/tables/calling -> Lấy danh sách bàn đang gọi nhân viên
+router.route("/calling").get(getCallingTables);
 
 // GET /api/tables -> Lấy danh sách
 router.route("/").get(getTables);
