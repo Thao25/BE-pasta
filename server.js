@@ -39,8 +39,8 @@ io.on("connection", (socket) => {
 
       // 2. Bắn thông báo Real-time
       io.emit("new-notification", {
-        id: data.tableId + "_" + Date.now(),
-        tableId: data.tableId,
+        id: String(data.tableId),
+        tableId: String(data.tableId),
         title: `Khách hàng ${data.banId} đang gọi!`,
         body: data.noiDung || "Yêu cầu nhân viên hỗ trợ",
         status: "pending",
@@ -54,7 +54,7 @@ io.on("connection", (socket) => {
     await Table.findByIdAndUpdate(data.tableId, { DangGoiNhanVien: false });
 
     io.emit("receive-response", {
-      tableId: data.tableId,
+      tableId: String(data.tableId),
       message: "Nhân viên đang đến, vui lòng đợi chút nhé!",
     });
     io.emit("call-handled", { tableId: data.tableId });

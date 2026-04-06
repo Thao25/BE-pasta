@@ -174,30 +174,29 @@ const resetTableCall = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-// GET /api/tables/calling
+// @desc    Lấy danh sách các bàn đang yêu cầu phục vụ
+// @route   GET /api/tables/calling
 const getCallingTables = async (req, res) => {
   try {
-    // THÊM .lean() ở đây
     const callingTables = await Table.find({ DangGoiNhanVien: true }).lean();
 
-    console.log("Dữ liệu từ DB:", callingTables); // Xem log ở terminal Backend nhé
-
-    const formattedNotis = callingTables.map((t) => {
-      const safeId = t._id ? String(t._id) : Math.random().toString();
-
-      return {
-        id: safeId,
-        tableId: safeId,
-        title: `Khách hàng ${t.SoBan || "ẩn danh"} đang gọi!`,
-        body: t.YeuCauGanNhat || "Cần hỗ trợ",
-        status: "pending",
-      };
-    });
-
+    const formattedNotis = callingTables.map((t) => ({
+      id: t._id ? String(t._id) : Math.random().toString(),
+      tableId: t._id ? String(t._id) : "",
+      title: `Khách gọi tại ${t.SoBan || "Bàn ẩn danh"}`,
+      body:
+        t.YeuCauGanNhat && t.YeuCauGanNhat.trim() !== ""
+          ? t.YeuCauGanNhat
+          : "Yêu cầu phục vụ tại bàn",
+      status: "pending",
+    }));
+    console.log("Bàn đang gọi nhân viên:", formattedNotis);
     res.json({ success: true, data: formattedNotis });
   } catch (err) {
     console.error("Lỗi getCallingTables:", err);
-    res.status(500).json({ success: false });
+    res
+      .status(500)
+      .json({ success: false, message: "Lỗi server khi lấy danh sách gọi" });
   }
 };
 module.exports = {
