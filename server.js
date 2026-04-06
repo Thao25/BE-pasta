@@ -39,7 +39,7 @@ io.on("connection", (socket) => {
 
       // 2. Bắn thông báo Real-time
       io.emit("new-notification", {
-        id: Date.now(),
+        id: data.tableId + "_" + Date.now(),
         tableId: data.tableId,
         title: `Khách hàng ${data.banId} đang gọi!`,
         body: data.noiDung || "Yêu cầu nhân viên hỗ trợ",
