@@ -180,8 +180,8 @@ const getCallingTables = async (req, res) => {
     const callingTables = await Table.find({ DangGoiNhanVien: true });
 
     const formattedNotis = callingTables.map((t) => ({
-      id: t._id,
-      tableId: t._id,
+      id: t._id.toString(),
+      tableId: t._id.toString(),
       title: `Khách hàng ${t.SoBan} đang gọi!`,
       body: t.YeuCauGanNhat || "Cần hỗ trợ",
       status: "pending",
