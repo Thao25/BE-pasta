@@ -68,7 +68,7 @@ const createOrder = async (req, res) => {
         existingOrder.ChiTietMon.push(...processedNewItems);
         existingOrder.TongTien += Math.round(tongTienMoiCoThue);
         existingOrder.TrangThaiOrder = "ChoXuLy"; //
-        existingOrder.TrangThai = "Có Khách"; // Đảm bảo trạng thái bàn vẫn là Có Khách
+        existingOrder.TrangThai = "Có Khách";
         finalOrder = await existingOrder.save();
       }
     }
@@ -81,6 +81,7 @@ const createOrder = async (req, res) => {
         ChiTietMon: processedNewItems,
         TongTien: Math.round(tongTienMoiCoThue),
         TrangThaiOrder: "ChoXuLy",
+        TrangThai: "Có Khách",
         ThanhToan: {
           TrangThai: "ChuaThanhToan",
           PhanTramVAT: vatRate,
@@ -95,6 +96,7 @@ const createOrder = async (req, res) => {
 
     if (global.io) {
       global.io.emit("update_order", finalOrder);
+      console.log("Đã emit sự kiện update_order sau khi tạo/gộp đơn");
     }
 
     res.status(201).json({ message: 0, data: finalOrder });
@@ -514,12 +516,18 @@ const cancelOrderItem = async (req, res) => {
         message: `Món "${itemToCancel.TenMon.vi}" đã bị hủy. Lý do: ${reason || "Hết nguyên liệu"}`,
         newTotal: order.TongTien,
       });
+      console.log(
+        `Đã emit notification-customer-${order.KhachHangZaloId} về việc hủy món ${itemToCancel.TenMon.vi} với lý do: ${reason}`,
+      );
     } else {
       io.emit("item-cancelled-by-customer", {
         orderId: order._id,
         itemId: itemId,
         message: `Bàn ${order.BanId} vừa hủy món ${itemToCancel.TenMon.vi}`,
       });
+      console.log(
+        `Đã emit item-cancelled-by-customer cho món ${itemToCancel.TenMon.vi} với lý do: ${reason}`,
+      );
     }
 
     res.status(200).json({
