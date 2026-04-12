@@ -499,9 +499,9 @@ const cancelOrderItem = async (req, res) => {
     const thue = (subTotal * vatRate) / 100;
     order.TongTien = Math.round(subTotal + thue);
 
-    if (order.ChiTietMon.length === 0) {
-      order.TrangThaiOrder = "DaThanhToan";
-    }
+    // if (order.ChiTietMon.length === 0) {
+    //   order.TrangThaiOrder = "DaThanhToan";
+    // }
 
     await order.save();
 
