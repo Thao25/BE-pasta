@@ -11,6 +11,7 @@ const {
   serverConfirmServed,
   getOrdersForStaff,
   getOrdersToday,
+  cancelOrderItem,
 } = require("../controllers/orderController");
 
 // GET /api/orders/staff -> Lấy danh sách đơn hàng cho nhan viên
@@ -33,6 +34,9 @@ router.route("/:id").get(getOrderById);
 
 // PUT /api/orders/:id -> Cập nhật trạng thái/Thanh toán
 router.route("/:id").put(updateOrderStatus);
+
+// PUT /api/orders/cancel-item/:orderId -> Hủy món trong đơn hàng
+router.route("/cancel-item").patch(cancelOrderItem);
 
 // PUT /api/orders/cancel/:id -> Hủy đơn hàng
 router.route("/cancel/:id").put(cancelOrder);

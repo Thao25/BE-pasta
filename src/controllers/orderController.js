@@ -444,6 +444,97 @@ const getOrdersToday = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+// @desc    Hủy một món ăn trong đơn hàng và tính lại tiền bao gồm VAT + Options
+// @route   PATCH /api/order/cancel-item
+// @access  Private (Khách hàng hoặc Bếp/Bar)
+const cancelOrderItem = async (req, res) => {
+  const { orderId, itemId, reason, role } = req.body;
+
+  try {
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, error: "Không tìm thấy đơn hàng." });
+    }
+
+    const itemIndex = order.ChiTietMon.findIndex(
+      (item) => item._id.toString() === itemId,
+    );
+    if (itemIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        error: "Món ăn không tồn tại trong đơn hàng.",
+      });
+    }
+
+    const itemToCancel = order.ChiTietMon[itemIndex];
+
+    if (itemToCancel.TrangThaiMon !== "ChoBep") {
+      return res.status(400).json({
+        success: false,
+        error: "Không thể hủy món này vì bếp đã bắt đầu chế biến.",
+      });
+    }
+
+    const restaurant = await Restaurant.findOne();
+    const vatRate = restaurant?.CauHinh?.PhanTramVAT || 0;
+
+    // 1. Thực hiện xóa món khỏi danh sách
+    order.ChiTietMon.splice(itemIndex, 1);
+
+    // 2. Tính toán lại tổng tiền dựa trên danh sách món còn lại (BAO GỒM OPTIONS)
+    const subTotal = order.ChiTietMon.reduce((total, item) => {
+      let giaOptions = 0;
+      if (item.TuyChonDaChon && item.TuyChonDaChon.length > 0) {
+        giaOptions = item.TuyChonDaChon.reduce(
+          (sum, opt) => sum + (Number(opt.Gia) || 0),
+          0,
+        );
+      }
+      return total + (item.GiaDonVi + giaOptions) * item.SoLuong;
+    }, 0);
+
+    // 3. Tính toán lại thuế và tổng tiền có thuế (Math.round để tránh sai số)
+    const thue = (subTotal * vatRate) / 100;
+    order.TongTien = Math.round(subTotal + thue);
+
+    if (order.ChiTietMon.length === 0) {
+      order.TrangThaiOrder = "DaThanhToan";
+    }
+
+    await order.save();
+
+    // 4. Gửi thông báo thời gian thực
+    const io = req.io || global.io;
+    if (role === "Bep" || role === "Bar") {
+      io.emit(`notification-customer-${order.KhachHangZaloId}`, {
+        type: "ITEM_CANCELLED",
+        title: "Món ăn đã bị hủy",
+        message: `Món "${itemToCancel.TenMon.vi}" đã bị hủy. Lý do: ${reason || "Hết nguyên liệu"}`,
+        newTotal: order.TongTien,
+      });
+    } else {
+      io.emit("item-cancelled-by-customer", {
+        orderId: order._id,
+        itemId: itemId,
+        message: `Bàn ${order.BanId} vừa hủy món ${itemToCancel.TenMon.vi}`,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "0",
+      data: order,
+    });
+  } catch (err) {
+    console.error(err);
+    res
+      .status(500)
+      .json({ success: false, error: "Lỗi hệ thống khi xử lý hủy món." });
+  }
+};
+
 module.exports = {
   createOrder,
   getOrders,
@@ -455,4 +546,5 @@ module.exports = {
   cancelOrder,
   getOrderHistory,
   getOrdersForStaff,
+  cancelOrderItem,
 };

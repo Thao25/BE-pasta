@@ -2,8 +2,7 @@ const Food = require("../models/Food");
 const Restaurant = require("../models/restaurant");
 const Order = require("../models/order");
 
-// --- PHẦN 1: AI "TỰ CHẾ" (BACKUP PLAN) ---
-// Giữ nguyên logic chat thông minh đã làm ở bước trước
+// --- PHẦN 1: AI
 function localAIResponse(message, foods, restaurantInfo, currentOrder) {
   const msg = message.toLowerCase();
 
@@ -235,7 +234,9 @@ const chatWithAI = async (req, res) => {
     if (zaloId) {
       currentOrder = await Order.findOne({
         KhachHangZaloId: zaloId,
-        TrangThaiOrder: { $in: ["ChoXuLy", "DangCheBien", "DaPhucVu"] },
+        TrangThaiOrder: {
+          $in: ["ChoXuLy", "DangCheBien", "DaLamXong", "DaPhucVu"],
+        },
       }).sort({ createdAt: -1 });
 
       if (currentOrder) {
@@ -245,7 +246,7 @@ const chatWithAI = async (req, res) => {
         orderContext = `
             THÔNG TIN ĐƠN HÀNG CỦA KHÁCH:
             - Món: ${monAn}
-            - Trạng thái: ${currentOrder.TrangThaiOrder} (ChoXuLy: Pending, DangCheBien: Cooking, DaPhucVu: Served).
+            - Trạng thái: ${currentOrder.TrangThaiOrder} (ChoXuLy: Pending, DangCheBien: Cooking, DaLamXong: Done, DaPhucVu: Served).
             - Tổng tiền: ${currentOrder.TongTien}
             `;
       }
