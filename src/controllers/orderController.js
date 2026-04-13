@@ -95,9 +95,17 @@ const createOrder = async (req, res) => {
     }
 
     if (global.io) {
-      global.io.emit("update_order", finalOrder);
-      message: `Bàn ${finalOrder.BanId?.SoBan || "..."} - ${finalOrder.KhuVuc} vừa  đặt món mới.`;
-      console.log("Đã emit sự kiện update_order sau khi tạo/gộp đơn");
+      const populatedOrder = await Order.findById(finalOrder._id).populate(
+        "BanId",
+        "SoBan KhuVuc",
+      );
+      global.io.emit("update_order", {
+        ...populatedOrder._doc,
+        message: `Bàn ${populatedOrder.BanId?.SoBan || "..."} - ${populatedOrder.BanId?.KhuVuc || "..."} vừa  đặt món mới.`,
+      });
+      console.log(
+        `✅ Socket: Bàn ${populatedOrder.BanId?.SoBan || "..."} vừa đặt món mới.`,
+      );
     }
 
     res.status(201).json({ message: 0, data: finalOrder });
@@ -501,48 +509,75 @@ const cancelOrderItem = async (req, res) => {
     // 3. Tính toán lại thuế và tổng tiền có thuế (Math.round để tránh sai số)
     const thue = (subTotal * vatRate) / 100;
     order.TongTien = Math.round(subTotal + thue);
+    const savedOrder = await (
+      await order.save()
+    ).populate("BanId", "SoBan KhuVuc");
 
-    // if (order.ChiTietMon.length === 0) {
-    //   order.TrangThaiOrder = "DaThanhToan";
-    // }
-
-    await order.save();
-
-    // 4. Gửi thông báo thời gian thực
-    const io = req.io || global.io;
-    if (role === "Bep" || role === "Bar") {
-      io.emit(`notification-customer-${order.KhachHangZaloId}`, {
-        type: "ITEM_CANCELLED",
-        title: "Món ăn đã bị hủy",
-        message: `Món "${itemToCancel.TenMon.vi}" đã bị hủy. Lý do: ${reason || "Hết nguyên liệu"}`,
-        newTotal: order.TongTien,
-      });
-      console.log(
-        `Đã emit notification-customer-${order.KhachHangZaloId} về việc hủy món ${itemToCancel.TenMon.vi} với lý do: ${reason}`,
-      );
-    } else {
-      io.emit("item-cancelled-by-customer", {
-        orderId: order._id,
-        itemId: itemId,
-        message: `Bàn ${order.BanId?.SoBan || "..."} - ${order.KhuVuc} vừa hủy món ${itemToCancel.TenMon.vi}`,
-      });
-      console.log(
-        `Đã emit item-cancelled-by-customer cho món ${itemToCancel.TenMon.vi} với lý do: ${reason}`,
-      );
+    if (global.io) {
+      if (role === "Bep" || role === "Bar") {
+        global.io.emit(`notification-customer-${order.KhachHangZaloId}`, {
+          type: "ITEM_CANCELLED",
+          title: "Món ăn đã bị hủy",
+          message: `Món "${itemToCancel.TenMon.vi}" bị hủy. Lý do: ${reason || "Hết nguyên liệu"}`,
+          newTotal: order.TongTien,
+        });
+      } else {
+        // Khách hủy món - Sử dụng thông tin từ savedOrder đã populate
+        global.io.emit("item-cancelled-by-customer", {
+          orderId: order._id,
+          itemId: itemId,
+          message: `Bàn ${savedOrder.BanId?.SoBan || "..."} - ${savedOrder.BanId?.KhuVuc || ""} vừa hủy món ${itemToCancel.TenMon.vi}`,
+        });
+      }
+      global.io.emit("order_updated", savedOrder);
     }
 
-    res.status(200).json({
-      success: true,
-      message: "0",
-      data: order,
-    });
+    res.status(200).json({ success: true, message: "0", data: savedOrder });
   } catch (err) {
     console.error(err);
-    res
-      .status(500)
-      .json({ success: false, error: "Lỗi hệ thống khi xử lý hủy món." });
+    res.status(500).json({ success: false, error: "Lỗi hệ thống." });
   }
 };
+//     await order.save();
+//     const orderForSocket = await Order.findById(order._id).populate(
+//       "BanId",
+//       "SoBan KhuVuc",
+//     );
+//     // 4. Gửi thông báo thời gian thực
+//     const io = req.io || global.io;
+//     if (role === "Bep" || role === "Bar") {
+//       io.emit(`notification-customer-${order.KhachHangZaloId}`, {
+//         type: "ITEM_CANCELLED",
+//         title: "Món ăn đã bị hủy",
+//         message: `Món "${itemToCancel.TenMon.vi}" đã bị hủy. Lý do: ${reason || "Hết nguyên liệu"}`,
+//         newTotal: order.TongTien,
+//       });
+//       console.log(
+//         `Món "${itemToCancel.TenMon.vi}" đã bị hủy. Lý do: ${reason || "Hết nguyên liệu"}`,
+//       );
+//     } else {
+//       io.emit("item-cancelled-by-customer", {
+//         orderId: order._id,
+//         itemId: itemId,
+//         message: `Bàn ${orderForSocket.BanId?.SoBan || "..."} - ${orderForSocket.BanId?.KhuVuc || "..."} vừa hủy món ${itemToCancel.TenMon.vi}`,
+//       });
+//       console.log(
+//         `Đã emit item-cancelled-by-customer cho món ${itemToCancel.TenMon.vi} với lý do: ${reason}`,
+//       );
+//     }
+
+//     res.status(200).json({
+//       success: true,
+//       message: "0",
+//       data: order,
+//     });
+//   } catch (err) {
+//     console.error(err);
+//     res
+//       .status(500)
+//       .json({ success: false, error: "Lỗi hệ thống khi xử lý hủy món." });
+//   }
+// };
 
 module.exports = {
   createOrder,
