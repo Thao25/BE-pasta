@@ -96,9 +96,8 @@ const createOrder = async (req, res) => {
 
     if (global.io) {
       global.io.emit("update_order", finalOrder);
-      message: `Bàn ${finalOrder.BanId?.SoBan || "..."} - ${finalOrder.KhuVuc} vừa  đặt món mới.`;,
+      message: `Bàn ${finalOrder.BanId?.SoBan || "..."} - ${finalOrder.KhuVuc} vừa  đặt món mới.`;
       console.log("Đã emit sự kiện update_order sau khi tạo/gộp đơn");
-
     }
 
     res.status(201).json({ message: 0, data: finalOrder });
