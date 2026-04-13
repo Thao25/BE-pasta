@@ -101,7 +101,7 @@ const createOrder = async (req, res) => {
       );
       global.io.emit("update_order", {
         ...populatedOrder._doc,
-        message: `${populatedOrder.BanId?.SoBan || "..."} - ${populatedOrder.BanId?.KhuVuc || "..."} vừa  đặt món mới.`,
+        message: `Bàn ${populatedOrder.BanId?.SoBan || "..."} - ${populatedOrder.BanId?.KhuVuc || ""} vừa đặt thêm món mới.`,
       });
       console.log(
         `✅ Socket:  ${populatedOrder.BanId?.SoBan || "..."} vừa đặt món mới.`,
@@ -176,7 +176,12 @@ const updateOrderStatus = async (req, res) => {
       if (table) {
         table.TrangThai = "ChoThanhToan";
         await table.save();
-        if (global.io) global.io.emit("table_updated", table);
+        if (global.io) {
+          global.io.emit("table_updated", {
+            table,
+            message: `${table.SoBan} đã lên đủ món. Chúc quý khách ngon miệng!`,
+          });
+        }
       }
     }
 
@@ -197,14 +202,19 @@ const updateOrderStatus = async (req, res) => {
           await table.save();
 
           // Real-time cập nhật bàn
-          if (global.io) global.io.emit("table_updated", table);
+          if (global.io)
+            global.io.emit(
+              "table_updated",
+              table,
+              (message = `${table.SoBan} đã thanh toán thành công.`),
+            );
         }
       }
     }
 
-    const updatedOrder = await order.save();
-
-    // Real-time cập nhật đơn hàng
+    const updatedOrder = await (
+      await order.save()
+    ).populate("BanId", "SoBan KhuVuc");
     if (global.io) global.io.emit("order_updated", updatedOrder);
 
     res.json({ message: 0, data: updatedOrder });
@@ -296,24 +306,29 @@ const updateStaffOrderStatus = async (req, res) => {
       order.TrangThaiOrder = "DaLamXong";
     }
 
-    const updatedOrder = await order.save();
+    const updatedOrder = await (
+      await order.save()
+    ).populate("BanId", "SoBan KhuVuc");
 
-    // 4. Socket Real-time
     if (global.io) {
-      // Đảm bảo đơn hàng gửi đi đã có thông tin bàn để các màn hình khác cập nhật UI
-      const orderForSocket = await Order.findById(order._id)
-        .populate("BanId", "SoBan KhuVuc")
-        .lean(); // Dùng lean để lấy object nhẹ hơn
-
-      global.io.emit("order_updated", orderForSocket);
-
-      // Thông báo riêng cho Phục vụ khi có món "DaXong"
+      global.io.emit("order_updated", updatedOrder);
+      if (newStatus === "DangLam") {
+        global.io.emit("notify_customer", {
+          orderId: updatedOrder._id,
+          message: `Quầy ${role} đang chế biến món cho ${updatedOrder.BanId?.SoBan || "..."}. Vui lòng đợi trong  10 phút!`,
+        });
+      }
       if (newStatus === "DaXong") {
         global.io.emit("notify_server_food_ready", {
           orderId: order._id,
-          role: role, // "Bep" hoặc "Bar"
-          ban: orderForSocket.BanId,
-          message: `Món từ ${role} cho ${orderForSocket.BanId?.SoBan} đã sẵn sàng!`,
+          role: role,
+          ban: updatedOrder.BanId,
+          message: `Món từ ${role} cho ${updatedOrder.BanId?.SoBan} đã sẵn sàng!`,
+        });
+
+        global.io.emit("notify_customer", {
+          orderId: updatedOrder._id,
+          message: `Quầy ${role} đã sẵn sàng! Vui lòng đợi nhân viên phục vụ lên món!`,
         });
       }
     }
@@ -364,7 +379,9 @@ const serverConfirmServed = async (req, res) => {
       }
     }
 
-    const savedOrder = await order.save();
+    const savedOrder = await (
+      await order.save()
+    ).populate("BanId", "SoBan KhuVuc");
     if (global.io) global.io.emit("order_updated", savedOrder);
 
     res.json({ message: 0, data: savedOrder });
