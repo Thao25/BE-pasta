@@ -96,7 +96,9 @@ const createOrder = async (req, res) => {
 
     if (global.io) {
       global.io.emit("update_order", finalOrder);
+      message: `Bàn ${finalOrder.BanId?.SoBan || "..."} - ${finalOrder.KhuVuc} vừa  đặt món mới.`;,
       console.log("Đã emit sự kiện update_order sau khi tạo/gộp đơn");
+
     }
 
     res.status(201).json({ message: 0, data: finalOrder });
@@ -523,7 +525,7 @@ const cancelOrderItem = async (req, res) => {
       io.emit("item-cancelled-by-customer", {
         orderId: order._id,
         itemId: itemId,
-        message: `Bàn ${order.BanId} vừa hủy món ${itemToCancel.TenMon.vi}`,
+        message: `Bàn ${order.BanId?.SoBan || "..."} - ${order.KhuVuc} vừa hủy món ${itemToCancel.TenMon.vi}`,
       });
       console.log(
         `Đã emit item-cancelled-by-customer cho món ${itemToCancel.TenMon.vi} với lý do: ${reason}`,
