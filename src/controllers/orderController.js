@@ -2,7 +2,44 @@ const Order = require("../models/order");
 const Table = require("../models/table");
 const Food = require("../models/Food");
 const Restaurant = require("../models/restaurant");
+const Notification = require("../models/Notification");
 const moment = require("moment-timezone");
+
+const createAndSendNotification = async (
+  zaloId,
+  title,
+  message,
+  type,
+  tableInfo,
+  orderId = null,
+) => {
+  try {
+    const tableLabel = tableInfo ? `[${tableInfo.SoBan}] ` : "";
+    const finalMessage = `${tableLabel}${message}`;
+
+    await Notification.create({
+      KhachHangZaloId: zaloId,
+      Title: title,
+      Message: finalMessage,
+      Type: type,
+      IsRead: false,
+    });
+
+    if (global.io) {
+      global.io.emit(`notification-customer-${zaloId}`, {
+        title,
+        message: finalMessage,
+        type,
+        orderId,
+        table: tableInfo,
+        time: new Date(),
+      });
+    }
+  } catch (err) {
+    console.error("Lỗi khi tạo thông báo định danh bàn:", err);
+  }
+};
+
 const createOrder = async (req, res) => {
   try {
     const { BanId, KhachHangZaloId, ChiTietMon } = req.body;
@@ -54,7 +91,7 @@ const createOrder = async (req, res) => {
 
     let finalOrder;
 
-    // 2. Kiểm tra gộp đơn (Logic giữ nguyên)
+    // 2. Kiểm tra gộp đơn
     if (
       (table.TrangThai === "Có Khách" ||
         table.TrangThai === "Chờ thanh toán") &&
@@ -101,7 +138,7 @@ const createOrder = async (req, res) => {
       );
       global.io.emit("update_order", {
         ...populatedOrder._doc,
-        message: `Bàn ${populatedOrder.BanId?.SoBan || "..."} - ${populatedOrder.BanId?.KhuVuc || ""} vừa đặt thêm món mới.`,
+        message: `${populatedOrder.BanId?.SoBan || "..."} - ${populatedOrder.BanId?.KhuVuc || ""} vừa đặt thêm món mới.`,
       });
       console.log(
         `✅ Socket:  ${populatedOrder.BanId?.SoBan || "..."} vừa đặt món mới.`,
@@ -176,12 +213,15 @@ const updateOrderStatus = async (req, res) => {
       if (table) {
         table.TrangThai = "ChoThanhToan";
         await table.save();
-        if (global.io) {
-          global.io.emit("table_updated", {
-            table,
-            message: `${table.SoBan} đã lên đủ món. Chúc quý khách ngon miệng!`,
-          });
-        }
+
+        await createAndSendNotification(
+          order.KhachHangZaloId,
+          "Món ăn đã lên đủ",
+          "Món ăn của bạn đã lên đủ món.Chúc quý khách ngon miệng!",
+          "UPDATE",
+          { SoBan: table.SoBan, KhuVuc: table.KhuVuc },
+          order._id,
+        );
       }
     }
 
@@ -215,7 +255,6 @@ const updateOrderStatus = async (req, res) => {
     const updatedOrder = await (
       await order.save()
     ).populate("BanId", "SoBan KhuVuc");
-    if (global.io) global.io.emit("order_updated", updatedOrder);
 
     res.json({ message: 0, data: updatedOrder });
   } catch (error) {
@@ -229,8 +268,8 @@ const getOrderHistory = async (req, res) => {
     const { zaloId } = req.params;
 
     const orders = await Order.find({ KhachHangZaloId: zaloId })
-      .populate("BanId", "SoBan KhuVuc") // Để hiển thị khách ngồi bàn nào
-      .sort({ createdAt: -1 }); // Mới nhất lên đầu
+      .populate("BanId", "SoBan KhuVuc")
+      .sort({ createdAt: -1 });
 
     res.status(200).json({ message: 0, data: orders });
   } catch (error) {
@@ -312,24 +351,36 @@ const updateStaffOrderStatus = async (req, res) => {
 
     if (global.io) {
       global.io.emit("order_updated", updatedOrder);
+
+      let title = "";
+      let message = "";
       if (newStatus === "DangLam") {
-        global.io.emit("notify_customer", {
-          orderId: updatedOrder._id,
-          message: `Quầy ${role} đang chế biến món cho ${updatedOrder.BanId?.SoBan || "..."}. Vui lòng đợi trong  10 phút!`,
-        });
-      }
-      if (newStatus === "DaXong") {
+        title = "Đang chế biến";
+        message = `Quầy ${role} đang chuẩn bị món ăn cho bạn. Vui lòng đợi trong 10 phút!`;
+      } else if (newStatus === "DaXong") {
+        title = "Món ăn đã sẵn sàng";
+        message = `Món từ quầy ${role} đã xong. Nhân viên sẽ mang tới ngay cho bạn!`;
+
         global.io.emit("notify_server_food_ready", {
           orderId: order._id,
-          role: role,
+          role,
           ban: updatedOrder.BanId,
-          message: `Món từ ${role} cho ${updatedOrder.BanId?.SoBan} đã sẵn sàng!`,
+          message: `Món từ quầy ${role} cho ${updatedOrder.BanId?.SoBan} đã sẵn sàng!`,
         });
+      }
 
-        global.io.emit("notify_customer", {
-          orderId: updatedOrder._id,
-          message: `Quầy ${role} đã sẵn sàng! Vui lòng đợi nhân viên phục vụ lên món!`,
-        });
+      if (title) {
+        await createAndSendNotification(
+          updatedOrder.KhachHangZaloId,
+          title,
+          message,
+          "STATUS",
+          {
+            SoBan: updatedOrder.BanId?.SoBan,
+            KhuVuc: updatedOrder.BanId?.KhuVuc,
+          },
+          updatedOrder._id,
+        );
       }
     }
 
@@ -371,18 +422,19 @@ const serverConfirmServed = async (req, res) => {
     if (isAllServed) {
       order.TrangThaiOrder = "DaPhucVu";
 
+      const savedOrder = await (
+        await order.save()
+      ).populate("BanId", "SoBan KhuVuc");
+
+      if (global.io) global.io.emit("order_updated", savedOrder);
+
       const table = await Table.findById(order.BanId);
       if (table) {
-        table.TrangThai = "Chờ thanh toán"; // Đồng bộ với database của bạn
+        table.TrangThai = "Chờ thanh toán";
         await table.save();
         if (global.io) global.io.emit("table_updated", table);
       }
     }
-
-    const savedOrder = await (
-      await order.save()
-    ).populate("BanId", "SoBan KhuVuc");
-    if (global.io) global.io.emit("order_updated", savedOrder);
 
     res.json({ message: 0, data: savedOrder });
   } catch (error) {
@@ -532,17 +584,23 @@ const cancelOrderItem = async (req, res) => {
 
     if (global.io) {
       if (role === "Bep" || role === "Bar") {
-        global.io.emit(`notification-customer-${order.KhachHangZaloId}`, {
-          type: "ITEM_CANCELLED",
-          title: "Món ăn đã bị hủy",
-          message: `Món "${itemToCancel.TenMon.vi}" đã bị hủy. Lý do: ${reason || "Hết nguyên liệu"}`,
-          newTotal: order.TongTien,
-        });
+        const title = "Món ăn bị hủy";
+        const message = `Món "${itemToCancel.TenMon.vi || itemToCancel.TenMon}" đã bị hủy. 
+        Lý do: ${reason || "Hết nguyên liệu"}`;
+
+        await createAndSendNotification(
+          order.KhachHangZaloId,
+          title,
+          message,
+          "CANCEL",
+          { SoBan: savedOrder.BanId?.SoBan, KhuVuc: savedOrder.BanId?.KhuVuc },
+          order._id,
+        );
       } else {
         global.io.emit("item-cancelled-by-customer", {
           orderId: order._id,
-          itemId: itemId,
-          message: `${savedOrder.BanId?.SoBan || "..."} - ${savedOrder.BanId?.KhuVuc || ""} vừa hủy món ${itemToCancel.TenMon.vi}`,
+          itemId,
+          message: `${savedOrder.BanId?.SoBan || "..."} vừa hủy món ${itemToCancel.TenMon.vi || itemToCancel.TenMon}`,
         });
       }
       global.io.emit("order_updated", savedOrder);

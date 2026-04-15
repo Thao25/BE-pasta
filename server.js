@@ -76,6 +76,7 @@ app.use("/api/ai", require("./src/routes/aiRoutes"));
 app.use("/api/restaurant", require("./src/routes/restaurantRoutes"));
 app.use("/api/users", require("./src/routes/userRoutes"));
 app.use("/api/reports", require("./src/routes/reportRoutes"));
+app.use("/api/notifications", require("./src/routes/notification"));
 
 startCronJobs();
 // Truy cập ảnh qua link: http://localhost:5000/uploads/image-xxx.jpg
