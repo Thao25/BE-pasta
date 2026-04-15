@@ -5,6 +5,8 @@ const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
 const Table = require("./src/models/table");
+const Order = require("./src/models/order");
+const Notification = require("./src/models/Notification");
 const startCronJobs = require("./src/controllers/cronService");
 
 dotenv.config({ path: "./.env" });
@@ -25,7 +27,15 @@ const io = new Server(server, {
 });
 
 global.io = io;
-
+const getActiveZaloIdByTable = async (tableId) => {
+  const activeOrder = await Order.findOne({
+    BanId: tableId,
+    TrangThaiOrder: {
+      $in: ["ChoXuLy", "DangCheBien", "DaLamXong", "DaPhucVu"],
+    },
+  }).sort({ createdAt: -1 });
+  return activeOrder ? activeOrder.KhachHangZaloId : null;
+};
 io.on("connection", (socket) => {
   console.log("Thiết bị mới kết nối:", socket.id);
 
@@ -36,7 +46,16 @@ io.on("connection", (socket) => {
         { _id: data.tableId },
         { DangGoiNhanVien: true, YeuCauGanNhat: data.noiDung },
       );
-
+      const zaloId = await getActiveZaloIdByTable(data.tableId);
+      if (zaloId) {
+        await Notification.create({
+          KhachHangZaloId: zaloId,
+          Title: "Đã gửi yêu cầu",
+          Message: `Bạn đã yêu cầu hỗ trợ: "${data.noiDung || "Yêu cầu nhân viên hỗ trợ"}"`,
+          Type: "SERVICE",
+          IsRead: true,
+        });
+      }
       // 2. Bắn thông báo Real-time
       io.emit("new-notification", {
         id: String(data.tableId),
@@ -52,6 +71,28 @@ io.on("connection", (socket) => {
 
   socket.on("staff-respond", async (data) => {
     await Table.findByIdAndUpdate(data.tableId, { DangGoiNhanVien: false });
+    const zaloId = await getActiveZaloIdByTable(data.tableId);
+
+    if (zaloId) {
+      const title = "Nhân viên đang đến";
+      const message =
+        "Yêu cầu của bạn đã được tiếp nhận,vui lòng đợi nhân viên đến hỗ trợ !";
+
+      // Lưu vào Database
+      await Notification.create({
+        KhachHangZaloId: zaloId,
+        Title: title,
+        Message: message,
+        Type: "SERVICE",
+        IsRead: false,
+      });
+      io.emit(`notification-customer-${zaloId}`, {
+        title: title,
+        message: message,
+        type: "SERVICE",
+        time: new Date(),
+      });
+    }
 
     io.emit("receive-response", {
       tableId: String(data.tableId),

@@ -48,8 +48,20 @@ const deleteNotification = async (req, res) => {
   }
 };
 
+// @desc    Xóa tất cả thông báo của khách hàng
+// @route   DELETE /api/notifications/clear-all/:zaloId
+const clearAllNotifications = async (req, res) => {
+  try {
+    await Notification.deleteMany({ KhachHangZaloId: req.params.zaloId });
+    res.status(200).json({ success: true, data: {} });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 module.exports = {
   getNotifications,
   markAllAsRead,
   deleteNotification,
+  clearAllNotifications,
 };
