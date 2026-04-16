@@ -17,6 +17,20 @@ const getNotifications = async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 };
+const getNotificationsForStaff = async (req, res) => {
+  try {
+    const notifications = await Notification.find({ isStaff: true })
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    res.status(200).json({
+      success: true,
+      data: notifications,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
 
 // @desc    Đánh dấu tất cả thông báo là đã đọc khi khách nhấn vào quả chuông
 // @route   PUT /api/notifications/read-all/:zaloId
@@ -61,6 +75,7 @@ const clearAllNotifications = async (req, res) => {
 
 module.exports = {
   getNotifications,
+  getNotificationsForStaff,
   markAllAsRead,
   deleteNotification,
   clearAllNotifications,

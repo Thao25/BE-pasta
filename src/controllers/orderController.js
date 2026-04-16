@@ -112,9 +112,11 @@ const createOrder = async (req, res) => {
         existingOrder.ChiTietMon.push(...processedNewItems);
         existingOrder.TongTien += Math.round(tongTienMoiCoThue);
         existingOrder.TrangThaiOrder = "ChoXuLy";
+        finalOrder = await existingOrder.save();
 
         table.TrangThai = "Có Khách";
-        finalOrder = await existingOrder.save();
+        table.OrderHienTaiId = finalOrder._id;
+        await table.save();
       }
     }
 
