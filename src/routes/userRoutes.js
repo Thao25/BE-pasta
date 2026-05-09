@@ -8,6 +8,8 @@ const {
   updateUserRole,
   deleteUser,
   loginZalo,
+  enableBiometric,
+  biometricLogin,
 } = require("../controllers/userController");
 
 // Đăng nhập quản trị
@@ -30,4 +32,8 @@ router.delete("/:id", deleteUser);
 
 // Đăng nhập từ Zalo
 router.post("/zalo-login", loginZalo);
+
+// Kiểm tra bao mật
+router.post("/enable-biometric", enableBiometric);
+router.post("/biometric-login", biometricLogin);
 module.exports = router;

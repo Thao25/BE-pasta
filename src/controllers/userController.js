@@ -43,6 +43,117 @@ const loginUser = async (req, res) => {
   }
 };
 
+//  * @desc    Bật xác thực vân tay / khuôn mặt cho nhân viên
+//  * @route   POST /api/users/enable-biometric
+//  * @access  Private (Nhân viên đã đăng nhập)
+
+const enableBiometric = async (req, res) => {
+  try {
+    const { deviceId } = req.body;
+    const userId = req.user?.id || req.body.userId; // hỗ trợ cả 2 cách
+
+    if (!deviceId) {
+      return res.status(400).json({
+        message: 1,
+        error: "Thiếu Device ID",
+      });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        message: 1,
+        error: "Không tìm thấy người dùng",
+      });
+    }
+
+    // Chỉ cho phép nhân viên (không cho khách hàng)
+    if (user.Role === "KhachHang") {
+      return res.status(403).json({
+        message: 1,
+        error: "Chức năng này chỉ dành cho nhân viên",
+      });
+    }
+
+    user.BaoMat = user.BaoMat || {};
+    user.BaoMat.SuDungVanTay = true;
+    user.BaoMat.DeviceId = deviceId;
+
+    await user.save();
+
+    res.json({
+      message: 0,
+      data: {
+        success: true,
+        message: "Đã bật đăng nhập sinh trắc học thành công",
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: 1, error: error.message });
+  }
+};
+
+//  * @desc    Đăng nhập bằng vân tay / khuôn mặt
+//  * @route   POST /api/users/biometric-login
+//  * @access  Public (nhưng kiểm tra DeviceId)
+
+const biometricLogin = async (req, res) => {
+  try {
+    const { userId, deviceId } = req.body;
+
+    if (!userId || !deviceId) {
+      return res.status(400).json({
+        message: 1,
+        error: "Thiếu thông tin userId hoặc deviceId",
+      });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        message: 1,
+        error: "Người dùng không tồn tại",
+      });
+    }
+
+    // Kiểm tra có bật biometric chưa
+    if (!user.BaoMat?.SuDungVanTay) {
+      return res.status(403).json({
+        message: 1,
+        error: "Tài khoản chưa bật xác thực sinh trắc học",
+      });
+    }
+
+    // Kiểm tra Device ID (bảo mật thiết bị)
+    if (user.BaoMat.DeviceId !== deviceId) {
+      return res.status(401).json({
+        message: 1,
+        error: "Thiết bị không hợp lệ. Vui lòng đăng nhập bằng mật khẩu",
+      });
+    }
+
+    // Tạo token mới
+    const token = generateToken(user._id);
+
+    res.json({
+      message: 0,
+      data: {
+        _id: user._id,
+        HoTen: user.HoTen,
+        Role: user.Role,
+        Token: token,
+        // Trả thêm thông tin biometric để frontend biết
+        BaoMat: {
+          SuDungVanTay: true,
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: 1, error: error.message });
+  }
+};
 // @desc    Tạo nhân viên mới
 // @route   POST /api/users/register
 const registerUser = async (req, res) => {
@@ -229,4 +340,6 @@ module.exports = {
   updateUserRole,
   deleteUser,
   loginZalo,
+  enableBiometric,
+  biometricLogin,
 };
