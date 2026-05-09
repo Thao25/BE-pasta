@@ -87,7 +87,7 @@ const createOrder = async (req, res) => {
         TenMon: food.TenMon,
         SoLuong: item.SoLuong,
         GiaDonVi: giaGocMon, // ✅ CHỈ LƯU GIÁ GỐC TẠI ĐÂY
-        TuyChonDaChon: item.TuyChonDaChon, // Chi tiết giá từng option đã nằm trong mảng này
+        TuyChonDaChon: item.TuyChonDaChon,
         GhiChu: item.GhiChu,
         TrangThaiMon: "ChoBep",
       });
@@ -353,6 +353,7 @@ const updateStaffOrderStatus = async (req, res) => {
 
     if (isAllItemsDone) {
       order.TrangThaiOrder = "DaLamXong";
+      table.TrangThai = "Chờ thanh toán";
     }
 
     const updatedOrder = await (

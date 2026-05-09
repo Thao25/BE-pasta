@@ -32,6 +32,8 @@ const userSchema = new mongoose.Schema(
     BaoMat: {
       SuDungVanTay: { type: Boolean, default: false },
       DeviceId: { type: String },
+      PublicKey: { type: String }, //  dùng chữ ký số (RSA)
+      LastBiometricLogin: { type: Date },
     },
   },
   {
