@@ -353,7 +353,13 @@ const updateStaffOrderStatus = async (req, res) => {
 
     if (isAllItemsDone) {
       order.TrangThaiOrder = "DaLamXong";
-      table.TrangThai = "Chờ thanh toán";
+
+      const table = await Table.findById(order.BanId);
+
+      if (table) {
+        table.TrangThai = "Chờ thanh toán";
+        await table.save();
+      }
     }
 
     const updatedOrder = await (
