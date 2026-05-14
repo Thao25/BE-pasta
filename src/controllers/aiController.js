@@ -1,10 +1,12 @@
 const Food = require("../models/Food");
 const Restaurant = require("../models/restaurant");
 const Order = require("../models/order");
+const redisClient = require("../redis/redisClient");
 
+const CACHE_KEYS = require("../redis/cacheKeys");
 // --- PHẦN 1: AI
 function localAIResponse(message, foods, restaurantInfo, currentOrder) {
-  const msg = message.toLowerCase();
+  const msg = (message || "").toLowerCase();
 
   // Phát hiện tiếng Anh
   const isEnglish =
@@ -184,13 +186,21 @@ async function callGroqAI(prompt) {
     messages: [
       {
         role: "system",
-        content:
-          "You are a professional restaurant waiter. Respond based on the language of the user's query. If checking order status, be precise. If recommending food, be creative.",
+        content: `
+You are a concise AI restaurant assistant.
+
+Rules:
+- Always reply using customer's language.
+- Keep answers under 80 words.
+- Be friendly and professional.
+- Never invent dishes, prices, or order status.
+- Only use provided restaurant and menu data.
+`,
       },
       { role: "user", content: prompt },
     ],
-    temperature: 0.6,
-    max_tokens: 400,
+    temperature: 0.3,
+    max_tokens: 250,
   };
 
   const response = await fetch(url, {
@@ -211,19 +221,89 @@ async function callGroqAI(prompt) {
   return data.choices[0].message.content;
 }
 
+async function getFoodsCache() {
+  const cacheKey = CACHE_KEYS.FOODS_ALL;
+
+  const cacheData = await redisClient.get(cacheKey);
+
+  if (cacheData) {
+    console.log("FOODS CACHE HIT");
+    return JSON.parse(cacheData);
+  }
+
+  console.log("FOODS CACHE MISS");
+
+  const foods = await Food.find({
+    TrangThai: "DangBan",
+  })
+    .select("TenMon MoTa Gia LoaiMon AnhMinhHoa")
+    .lean();
+
+  await redisClient.set(cacheKey, JSON.stringify(foods), {
+    EX: 300,
+  });
+
+  return foods;
+}
+
+async function getRestaurantInfoCache() {
+  const cacheKey = CACHE_KEYS.RESTAURANT_INFO;
+
+  const cacheData = await redisClient.get(cacheKey);
+
+  if (cacheData) {
+    console.log("RESTAURANT CACHE HIT");
+    return JSON.parse(cacheData);
+  }
+
+  console.log("RESTAURANT CACHE MISS");
+
+  const restaurantInfo = await Restaurant.findOne().lean();
+
+  await redisClient.set(cacheKey, JSON.stringify(restaurantInfo), {
+    EX: 3600,
+  });
+
+  return restaurantInfo;
+}
+function isOrderQuestion(message) {
+  const msg = (message || "").toLowerCase();
+
+  return (
+    msg.includes("đơn") ||
+    msg.includes("order") ||
+    msg.includes("status") ||
+    msg.includes("xong chưa") ||
+    msg.includes("khi nào")
+  );
+}
 // --- PHẦN 3: CONTROLLERS ---
 
 // @desc    Chat tư vấn (Text + Suggestions)
 // @route   POST /api/ai/chat
+
 const chatWithAI = async (req, res) => {
   try {
     const { message, zaloId } = req.body;
+    const aiCacheKey = CACHE_KEYS.AI_CHAT(message, zaloId);
 
+    const shouldUseCache = !isOrderQuestion(message);
+
+    if (shouldUseCache) {
+      const aiCache = await redisClient.get(aiCacheKey);
+
+      if (aiCache) {
+        console.log(`[REDIS] AI CHAT HIT: ${zaloId}`);
+
+        return res.json({
+          message: 0,
+          data: JSON.parse(aiCache),
+        });
+      }
+    }
     const [foods, restaurantInfo] = await Promise.all([
-      Food.find({ TrangThai: "DangBan" }).select(
-        "TenMon MoTa Gia LoaiMon AnhMinhHoa",
-      ),
-      Restaurant.findOne(),
+      getFoodsCache(),
+      getRestaurantInfoCache(),
     ]);
 
     const info = restaurantInfo;
@@ -271,20 +351,34 @@ const chatWithAI = async (req, res) => {
         .join("\n");
 
       const prompt = `
-          DATA CONTEXT:
-          ${infoContext}
-          ${orderContext}
-          
-          MENU (ID|Name_VI/Name_EN|Price):
-          ${menuContext}
+ROLE:
+You are an AI waiter for a restaurant.
 
-          CUSTOMER MESSAGE: "${message}"
+RESTAURANT:
+Name: ${info.TenNhaHang}
+Address: ${info.DiaChi}
+Wifi: ${info.CauHinh?.WifiPassword || "N/A"}
+Open: ${info.CauHinh?.GioMoCua || "08:00"} - ${info.CauHinh?.GioDongCua || "22:00"}
 
-          INSTRUCTIONS:
-          1. Detect language (VN/EN). Reply in that language.
-          2. Prioritize Info/Order Status questions.
-          3. If suggesting food, append "SUGGEST_IDS: id1, id2".
-        `;
+CURRENT ORDER:
+${orderContext}
+
+MENU:
+${menuContext}
+
+CUSTOMER MESSAGE:
+"${message}"
+
+RULES:
+- Detect Vietnamese or English automatically.
+- Reply in the same language as the customer.
+- Keep responses short, natural, and professional.
+- Prioritize order status and restaurant information.
+- Only recommend items from MENU.
+- If recommending food, append:
+SUGGEST_IDS:id1,id2
+- Do not invent menu items or prices.
+`;
 
       const rawText = await callGroqAI(prompt);
 
@@ -299,14 +393,34 @@ const chatWithAI = async (req, res) => {
         suggestedFoods = foods.filter((f) => idList.includes(f._id.toString()));
       }
 
+      const finalData = {
+        text: replyText,
+        suggestions: suggestedFoods,
+      };
+      if (shouldUseCache) {
+        await redisClient.set(aiCacheKey, JSON.stringify(finalData), {
+          EX: 600,
+        });
+      }
+
       return res.json({
         message: 0,
-        data: { text: replyText, suggestions: suggestedFoods },
+        data: finalData,
       });
     } catch (apiError) {
       console.warn("⚠️ AI Online lỗi:", apiError.message);
       const localResult = localAIResponse(message, foods, info, currentOrder);
-      return res.json({ message: 0, data: localResult });
+
+      if (shouldUseCache) {
+        await redisClient.set(aiCacheKey, JSON.stringify(localResult), {
+          EX: 600,
+        });
+      }
+
+      return res.json({
+        message: 0,
+        data: localResult,
+      });
     }
   } catch (error) {
     res
@@ -319,9 +433,21 @@ const chatWithAI = async (req, res) => {
 // @route   GET /api/ai/recommend
 const recommendFood = async (req, res) => {
   try {
-    const { zaloId } = req.query; // Lấy ID khách hàng từ URL (vd: ?zaloId=123)
+    const { zaloId } = req.query;
+    const recommendCacheKey = CACHE_KEYS.AI_RECOMMEND(zaloId);
 
-    const foods = await Food.find({ TrangThai: "DangBan" });
+    const recommendCache = await redisClient.get(recommendCacheKey);
+
+    if (recommendCache) {
+      console.log("AI RECOMMEND CACHE HIT");
+
+      return res.json({
+        message: 0,
+        data: JSON.parse(recommendCache),
+      });
+    }
+
+    const foods = await Food.find({ TrangThai: "DangBan" }).lean();
 
     // Logic Random dự phòng (Có tính toán loại món)
     const getRandomSmart = () => {
@@ -331,7 +457,9 @@ const recommendFood = async (req, res) => {
       const rDrink = drinks[Math.floor(Math.random() * drinks.length)];
       const rFood = mainDishes[Math.floor(Math.random() * mainDishes.length)];
       const others = foods.filter(
-        (f) => f._id !== rDrink?._id && f._id !== rFood?._id,
+        (f) =>
+          f._id.toString() !== rDrink?._id?.toString() &&
+          f._id.toString() !== rFood?._id?.toString(),
       );
       const rOther = others[Math.floor(Math.random() * others.length)];
 
@@ -345,7 +473,8 @@ const recommendFood = async (req, res) => {
         // Lấy 5 đơn gần nhất
         const pastOrders = await Order.find({ KhachHangZaloId: zaloId })
           .sort({ createdAt: -1 })
-          .limit(5);
+          .limit(5)
+          .lean();
 
         if (pastOrders.length > 0) {
           // Gom tất cả món đã từng ăn
@@ -404,7 +533,13 @@ const recommendFood = async (req, res) => {
       const jsonMatch = text.match(/\[.*\]/s);
 
       if (jsonMatch) {
-        const recommendedNames = JSON.parse(jsonMatch[0]);
+        let recommendedNames = [];
+
+        try {
+          recommendedNames = JSON.parse(jsonMatch[0]);
+        } catch {
+          throw new Error("AI JSON Parse Error");
+        }
         // Map tên về Object đầy đủ để hiển thị ảnh
         const finalSuggestions = foods.filter((f) =>
           recommendedNames.some(
@@ -417,12 +552,24 @@ const recommendFood = async (req, res) => {
           const smartRandom = getRandomSmart();
           // Merge và loại bỏ trùng lặp
           const merged = [...finalSuggestions, ...smartRandom].filter(
-            (v, i, a) => a.findIndex((t) => t._id === v._id) === i,
+            (v, i, a) =>
+              a.findIndex((t) => t._id.toString() === v._id.toString()) === i,
           );
           return res.json({ message: 0, data: merged.slice(0, 3) });
         }
 
-        return res.json({ message: 0, data: finalSuggestions });
+        await redisClient.set(
+          recommendCacheKey,
+          JSON.stringify(finalSuggestions),
+          {
+            EX: 900,
+          },
+        );
+
+        return res.json({
+          message: 0,
+          data: finalSuggestions,
+        });
       } else {
         throw new Error("AI Format Error");
       }

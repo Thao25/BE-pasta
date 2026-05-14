@@ -1,7 +1,19 @@
 const Food = require("../models/Food");
+const redisClient = require("../redis/redisClient");
 
+const CACHE_KEYS = require("../redis/cacheKeys");
 // @desc    Lấy danh sách tất cả món ăn
 // @route   GET /api/foods
+async function clearAICache() {
+  const chatKeys = await redisClient.keys("ai:chat:*");
+  const recommendKeys = await redisClient.keys("ai:recommend:*");
+
+  const allKeys = [...chatKeys, ...recommendKeys];
+
+  if (allKeys.length > 0) {
+    await redisClient.del(...allKeys);
+  }
+}
 const getFoods = async (req, res) => {
   try {
     const { category } = req.query;
@@ -24,6 +36,8 @@ const createFood = async (req, res) => {
   try {
     const newFood = new Food(req.body);
     const savedFood = await newFood.save();
+    await redisClient.del(CACHE_KEYS.FOODS_ALL);
+    await clearAICache();
     res.status(201).json({ message: 0, data: savedFood });
   } catch (error) {
     res
@@ -57,6 +71,10 @@ const updateFood = async (req, res) => {
     });
 
     if (updatedFood) {
+      await redisClient.del(CACHE_KEYS.FOODS_ALL);
+
+      await clearAICache();
+
       res.json({ message: 0, data: updatedFood });
     } else {
       res.status(404).json({ message: "Không tìm thấy món ăn" });
@@ -78,6 +96,8 @@ const updateFoodStatus = async (req, res) => {
     );
 
     if (updatedFood) {
+      await redisClient.del(CACHE_KEYS.FOODS_ALL);
+      await clearAICache();
       res.json({ message: 0, data: updatedFood });
     } else {
       res.status(404).json({ message: "Không tìm thấy món ăn" });
@@ -97,6 +117,8 @@ const deleteFood = async (req, res) => {
     if (food) {
       food.TrangThai = "TamNgung";
       await food.save();
+      await redisClient.del(CACHE_KEYS.FOODS_ALL);
+      await clearAICache();
       res.json({
         message: 0,
         data: { message: "Đã chuyển trạng thái món sang Tạm ngưng" },

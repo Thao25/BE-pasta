@@ -8,9 +8,12 @@ const {
   updateFoodStatus,
   deleteFood,
 } = require("../controllers/foodController");
+const cacheMiddleware = require("../middlewares/cacheMiddleware");
+
+const CACHE_KEYS = require("../redis/cacheKeys");
 
 // GET /api/foods -> Lấy danh sách
-router.route("/").get(getFoods);
+router.route("/").get(cacheMiddleware(CACHE_KEYS.FOODS_ALL, 300), getFoods);
 
 // POST /api/foods -> Tạo mới
 router.route("/").post(createFood);

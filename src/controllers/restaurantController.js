@@ -1,5 +1,6 @@
 const Restaurant = require("../models/restaurant");
-
+const redisClient = require("../redis/redisClient");
+const CACHE_KEYS = require("../redis/cacheKeys");
 // @desc    Lấy thông tin cấu hình nhà hàng
 // @route   GET /api/restaurant
 // @access  Public
@@ -76,6 +77,14 @@ const updateRestaurantConfig = async (req, res) => {
       { $set: updatePayload },
       { new: true, upsert: true, runValidators: true },
     );
+    // CLEAR CACHE
+    await redisClient.del(CACHE_KEYS.RESTAURANT_INFO);
+
+    const aiKeys = await redisClient.keys("ai:chat:*");
+
+    if (aiKeys.length > 0) {
+      await redisClient.del(aiKeys);
+    }
 
     if (global.io)
       global.io.emit("restaurant_status_changed", {
