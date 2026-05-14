@@ -271,7 +271,7 @@ async function getRestaurantInfoCache() {
   const cacheData = await redisClient.get(cacheKey);
 
   if (cacheData) {
-    console.log("RESTAURANT CACHE HIT");
+    console.log("RESTAURANT CACHE HIT", cacheData);
     return JSON.parse(cacheData);
   }
 
@@ -312,7 +312,7 @@ const chatWithAI = async (req, res) => {
       const aiCache = await redisClient.get(aiCacheKey);
 
       if (aiCache) {
-        console.log(`[REDIS] AI CHAT HIT: ${zaloId}`);
+        console.log(`[REDIS] AI CHAT HIT: ${zaloId}`, aiCache);
 
         return res.json({
           message: 0,
