@@ -223,14 +223,23 @@ Rules:
 
 async function getFoodsCache() {
   const cacheKey = CACHE_KEYS.FOODS_ALL;
+  try {
+    const cacheData = await redisClient.get(cacheKey);
 
-  const cacheData = await redisClient.get(cacheKey);
+    if (cacheData) {
+      console.log("FOODS CACHE HIT");
+      const parsed = JSON.parse(cacheData);
 
-  if (cacheData) {
-    console.log("FOODS CACHE HIT");
-    return JSON.parse(cacheData);
+      // Đảm bảo luôn là array
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+
+      console.warn("⚠️ Invalid foods cache format");
+    }
+  } catch (err) {
+    console.warn("⚠️ Redis parse error:", err.message);
   }
-
   console.log("FOODS CACHE MISS");
 
   const foods = await Food.find({
