@@ -12,7 +12,7 @@ const CACHE_KEYS = require("../redis/cacheKeys");
 // PUT /api/restaurant -> Cập nhật
 router
   .route("/")
-  .get(cacheMiddleware(CACHE_KEYS.RESTAURANT_INFO, 3600), getRestaurantInfo);
+  .get(cacheMiddleware(CACHE_KEYS.RESTAURANT_ALL, 3600), getRestaurantInfo);
 router.route("/").put(updateRestaurantConfig);
 
 module.exports = router;

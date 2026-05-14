@@ -79,6 +79,7 @@ const updateRestaurantConfig = async (req, res) => {
     );
     // CLEAR CACHE
     await redisClient.del(CACHE_KEYS.RESTAURANT_INFO);
+    await redisClient.del(CACHE_KEYS.RESTAURANT_ALL);
 
     const aiKeys = await redisClient.keys("ai:chat:*");
 
