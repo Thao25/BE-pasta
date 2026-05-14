@@ -222,23 +222,33 @@ Rules:
 }
 
 async function getFoodsCache() {
-  const cacheKey = CACHE_KEYS.FOODS_ALL;
+  const cacheKey = CACHE_KEYS.FOODS_RECOMMEND;
   try {
     const cacheData = await redisClient.get(cacheKey);
 
     if (cacheData) {
-      console.log("FOODS CACHE HIT");
+      console.log("FOODS CACHE HIT", cacheData);
+
       const parsed = JSON.parse(cacheData);
 
-      // Đảm bảo luôn là array
+      // Nếu cache là object {data:[...]}
+      if (parsed?.data && Array.isArray(parsed.data)) {
+        return parsed.data;
+      }
+
+      // Nếu cache là array chuẩn
       if (Array.isArray(parsed)) {
         return parsed;
       }
 
-      console.warn("⚠️ Invalid foods cache format");
+      console.warn("⚠️ Invalid foods cache format -> clear cache");
+
+      await redisClient.del(cacheKey);
     }
   } catch (err) {
     console.warn("⚠️ Redis parse error:", err.message);
+
+    await redisClient.del(cacheKey);
   }
   console.log("FOODS CACHE MISS");
 
@@ -448,7 +458,7 @@ const recommendFood = async (req, res) => {
     const recommendCache = await redisClient.get(recommendCacheKey);
 
     if (recommendCache) {
-      console.log("AI RECOMMEND CACHE HIT");
+      console.log("AI RECOMMEND CACHE HIT", recommendCache);
 
       return res.json({
         message: 0,

@@ -6,12 +6,12 @@ const cacheMiddleware = (key, ttl = 300) => {
       const cacheData = await redisClient.get(key);
 
       if (cacheData) {
-        console.log("CACHE HIT");
+        console.log("CACHE HIT", key);
 
         return res.json(JSON.parse(cacheData));
       }
 
-      console.log("CACHE MISS");
+      console.log("CACHE MISS", key);
 
       const originalJson = res.json.bind(res);
 
@@ -25,7 +25,7 @@ const cacheMiddleware = (key, ttl = 300) => {
 
       next();
     } catch (error) {
-      console.log(error);
+      console.log("CACHE ERROR", key, error);
       next();
     }
   };
