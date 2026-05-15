@@ -20,18 +20,45 @@ const getNotifications = async (req, res) => {
 const getNotificationsForStaff = async (req, res) => {
   try {
     const notifications = await Notification.find({ isStaff: true })
+      .populate({
+        path: "OrderId",
+        populate: {
+          path: "BanId",
+          select: "SoBan KhuVuc",
+        },
+      })
       .sort({ createdAt: -1 })
-      .limit(50);
+      .limit(50)
+      .lean();
+
+    const safeNotifications = notifications.map((n) => {
+      const hasValidTable = n.OrderId && n.OrderId.BanId;
+      return {
+        ...n,
+
+        tableId: hasValidTable
+          ? String(n.OrderId.BanId._id || n.OrderId.BanId)
+          : String(n.KhachHangZaloId || ""),
+      };
+    });
 
     res.status(200).json({
       success: true,
-      data: notifications,
+      message: 0,
+      data: safeNotifications,
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error(
+      "❌ Lỗi sập nguồn tại getNotificationsForStaff:",
+      err.message,
+    );
+    res.status(500).json({
+      success: false,
+      error: "Lỗi server nội bộ khi lấy thông báo nhân viên",
+      details: err.message,
+    });
   }
 };
-
 // @desc    Đánh dấu tất cả thông báo là đã đọc khi khách nhấn vào quả chuông
 // @route   PUT /api/notifications/read-all/:zaloId
 const markAllAsRead = async (req, res) => {
