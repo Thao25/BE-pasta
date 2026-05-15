@@ -150,35 +150,43 @@ const resetTableCall = async (req, res) => {
   try {
     const tableId = req.params.id;
 
+    if (!tableId || !mongoose.Types.ObjectId.isValid(tableId)) {
+      return res.status(400).json({
+        success: false,
+        message: "ID bàn không đúng định dạng MongoDB chuẩn!",
+      });
+    }
+
     const table = await Table.findByIdAndUpdate(
       tableId,
-      {
-        DangGoiNhanVien: false,
-        YeuCauGanNhat: "",
-      },
+      { DangGoiNhanVien: false, YeuCauGanNhat: "" },
       { new: true },
     );
 
     if (!table) {
       return res
         .status(404)
-        .json({ success: false, message: "Không tìm thấy bàn" });
+        .json({ success: false, message: "Không tìm thấy bàn cần reset" });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: "Đã xử lý yêu cầu phục vụ",
+      message: 0,
       data: table,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error("❌ Lỗi sập nguồn tại resetTableCall:", error.message);
+    return res.status(500).json({
+      success: false,
+      error: "Lỗi server khi reset trạng thái gọi bàn",
+      details: error.message,
+    });
   }
 };
 // @desc    Lấy danh sách các bàn đang yêu cầu phục vụ
 // @route   GET /api/tables/calling
 const getCallingTables = async (req, res) => {
   try {
-    // Chỉ tìm những bàn đang gọi nhân viên
     const callingTables = await Table.find({ DangGoiNhanVien: true }).lean();
 
     const validCallingTables = callingTables.filter(
@@ -197,21 +205,24 @@ const getCallingTables = async (req, res) => {
     }));
 
     console.log(
-      "🔔 Danh sách bàn đang gọi nhân viên đã đồng bộ:",
-      formattedNotis,
+      "🔔 [API calling] Đã nạp danh sách bàn gọi an toàn:",
+      formattedNotis.length,
     );
 
-    res.json({ success: true, data: formattedNotis });
+    return res.status(200).json({ success: true, data: formattedNotis });
   } catch (err) {
-    console.error("❌ Lỗi nghiêm trọng tại getCallingTables:", err);
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Lỗi server nội bộ khi lấy danh sách gọi",
-      });
+    console.error(
+      "❌ Lỗi sập nguồn nghiêm trọng tại getCallingTables:",
+      err.message,
+    );
+    return res.status(500).json({
+      success: false,
+      error: "Lỗi hệ thống nội bộ khi lấy danh sách bàn gọi",
+      details: err.message,
+    });
   }
 };
+
 module.exports = {
   getTables,
   getTableById,
