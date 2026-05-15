@@ -178,11 +178,16 @@ const resetTableCall = async (req, res) => {
 // @route   GET /api/tables/calling
 const getCallingTables = async (req, res) => {
   try {
+    // Chỉ tìm những bàn đang gọi nhân viên
     const callingTables = await Table.find({ DangGoiNhanVien: true }).lean();
 
-    const formattedNotis = callingTables.map((t) => ({
-      id: t._id ? String(t._id) : Math.random().toString(),
-      tableId: t._id ? String(t._id) : "",
+    const validCallingTables = callingTables.filter(
+      (t) => t._id && mongoose.Types.ObjectId.isValid(t._id),
+    );
+
+    const formattedNotis = validCallingTables.map((t) => ({
+      id: String(t._id),
+      tableId: String(t._id),
       title: `Khách gọi tại ${t.SoBan || "Bàn ẩn danh"}`,
       body:
         t.YeuCauGanNhat && t.YeuCauGanNhat.trim() !== ""
@@ -190,13 +195,21 @@ const getCallingTables = async (req, res) => {
           : "Yêu cầu phục vụ tại bàn",
       status: "pending",
     }));
-    console.log("Bàn đang gọi nhân viên:", formattedNotis);
+
+    console.log(
+      "🔔 Danh sách bàn đang gọi nhân viên đã đồng bộ:",
+      formattedNotis,
+    );
+
     res.json({ success: true, data: formattedNotis });
   } catch (err) {
-    console.error("Lỗi getCallingTables:", err);
+    console.error("❌ Lỗi nghiêm trọng tại getCallingTables:", err);
     res
       .status(500)
-      .json({ success: false, message: "Lỗi server khi lấy danh sách gọi" });
+      .json({
+        success: false,
+        error: "Lỗi server nội bộ khi lấy danh sách gọi",
+      });
   }
 };
 module.exports = {
