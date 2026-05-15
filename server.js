@@ -42,21 +42,39 @@ io.on("connection", (socket) => {
   socket.on("customer-call", async (data) => {
     console.log("Dữ liệu nhận từ Zalo:", data);
     try {
+      // 1. Cập nhật trạng thái bàn
       await Table.findOneAndUpdate(
         { _id: data.tableId },
         { DangGoiNhanVien: true, YeuCauGanNhat: data.noiDung },
       );
+
       const zaloId = await getActiveZaloIdByTable(data.tableId);
+
       if (zaloId) {
-        await Notification.create({
+        const title = "Đã gửi yêu cầu";
+        const message = `Bạn đã yêu cầu hỗ trợ: "${data.noiDung || "Yêu cầu nhân viên hỗ trợ"}"`;
+
+        // 2. Lưu vào Database
+        const newNoti = await Notification.create({
           KhachHangZaloId: zaloId,
-          Title: "Đã gửi yêu cầu",
-          Message: `Bạn đã yêu cầu hỗ trợ: "${data.noiDung || "Yêu cầu nhân viên hỗ trợ"}"`,
+          Title: title,
+          Message: message,
           Type: "SERVICE",
-          IsRead: true,
+          IsRead: false, // Nên để false để app khách hàng hiện số thông báo chưa đọc nhé
+        });
+
+        // 🌟 FIX QUAN TRỌNG: Bắn realtime ngay lập tức về cho khách hàng vừa gọi
+        io.emit(`notification-customer-${zaloId}`, {
+          _id: newNoti._id, // Trả về ID thật từ DB để sau này xóa/đọc được đúng
+          title: title,
+          message: message,
+          type: "SERVICE",
+          createdAt: newNoti.createdAt || new Date(),
+          IsRead: false,
         });
       }
-      // 2. Bắn thông báo Real-time
+
+      // 3. Bắn thông báo Real-time cho APP NHÂN VIÊN
       io.emit("new-notification", {
         id: String(data.tableId),
         tableId: String(data.tableId),
@@ -68,7 +86,6 @@ io.on("connection", (socket) => {
       console.error("Lỗi xử lý gọi món:", err);
     }
   });
-
   socket.on("staff-respond", async (data) => {
     await Table.findByIdAndUpdate(data.tableId, { DangGoiNhanVien: false });
     const zaloId = await getActiveZaloIdByTable(data.tableId);
