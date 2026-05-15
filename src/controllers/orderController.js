@@ -5,7 +5,7 @@ const Restaurant = require("../models/restaurant");
 const Notification = require("../models/Notification");
 const moment = require("moment-timezone");
 
-const createAndSendNotification = async (
+const createAndSendNotification = async ({
   zaloId,
   title,
   message,
@@ -13,13 +13,13 @@ const createAndSendNotification = async (
   isStaff = false,
   tableInfo,
   orderId = null,
-) => {
+}) => {
   try {
     const tableLabel = tableInfo ? `[${tableInfo.SoBan}] ` : "";
     const finalMessage = `${tableLabel}${message}`;
 
     const newNoti = await Notification.create({
-      KhachHangZaloId: zaloId,
+      KhachHangZaloId: isStaff ? null : zaloId,
       Title: title,
       Message: finalMessage,
       Type: type,
@@ -37,6 +37,10 @@ const createAndSendNotification = async (
       } else if (zaloId) {
         global.io.emit(`notification-customer-${zaloId}`, {
           ...newNoti._doc,
+          id: newNoti._id,
+          title: title,
+          message: finalMessage,
+          type: type,
           table: tableInfo,
           time: newNoti.createdAt,
         });
@@ -46,7 +50,6 @@ const createAndSendNotification = async (
     console.error("Lỗi khi tạo thông báo định danh bàn:", err);
   }
 };
-
 const createOrder = async (req, res) => {
   try {
     const { BanId, KhachHangZaloId, ChiTietMon } = req.body;
@@ -224,14 +227,15 @@ const updateOrderStatus = async (req, res) => {
         table.TrangThai = "ChoThanhToan";
         await table.save();
 
-        await createAndSendNotification(
-          order.KhachHangZaloId,
-          "Món ăn đã lên đủ",
-          "Món ăn của bạn đã lên đủ món.Chúc quý khách ngon miệng!",
-          "UPDATE",
-          { SoBan: table.SoBan, KhuVuc: table.KhuVuc },
-          order._id,
-        );
+        await createAndSendNotification({
+          zaloId: order.KhachHangZaloId,
+          title: "Món ăn đã lên đủ",
+          message: "Món ăn của bạn đã lên đủ món. Chúc quý khách ngon miệng!",
+          type: "UPDATE",
+          isStaff: false,
+          tableInfo: { SoBan: table.SoBan, KhuVuc: table.KhuVuc },
+          orderId: order._id,
+        });
       }
     }
 
@@ -252,12 +256,12 @@ const updateOrderStatus = async (req, res) => {
           await table.save();
 
           // Real-time cập nhật bàn
-          if (global.io)
-            global.io.emit(
-              "table_updated",
-              table,
-              (message = `${table.SoBan} đã thanh toán thành công.`),
-            );
+          if (global.io) {
+            global.io.emit("table_updated", {
+              ...table._doc,
+              message: `${table.SoBan} đã thanh toán thành công.`,
+            });
+          }
         }
       }
     }
@@ -376,7 +380,6 @@ const updateStaffOrderStatus = async (req, res) => {
         await createAndSendNotification({
           zaloId: updatedOrder.KhachHangZaloId,
           title: "Đang chế biến",
-
           message: `Quầy ${role} đang chuẩn bị món ăn cho bạn.Vui lòng chờ trong 10 phút!`,
           type: "STATUS",
           isStaff: false,
@@ -421,7 +424,6 @@ const updateStaffOrderStatus = async (req, res) => {
   }
 };
 
-//  PHỤC VỤ XÁC NHẬN BƯNG MÓN ---
 const serverConfirmServed = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -430,44 +432,77 @@ const serverConfirmServed = async (req, res) => {
     const order = await Order.findById(orderId).populate("ChiTietMon.FoodId");
     if (!order) return res.status(404).json({ message: "Không tìm thấy đơn" });
 
-    // 1. CHỈ CẬP NHẬT MÓN ĐƯỢC CLICK
     let itemFound = false;
+    let servedItemName = "";
+
     order.ChiTietMon.forEach((item) => {
-      // So sánh ID của item trong mảng ChiTietMon
       if (item._id.toString() === itemId) {
         item.TrangThaiMon = "DaRaMon";
+        servedItemName = item.TenMon?.vi || item.TenMon || "Món ăn";
         itemFound = true;
       }
     });
 
-    if (!itemFound)
+    if (!itemFound) {
       return res
         .status(400)
         .json({ message: "Không tìm thấy món này trong đơn" });
-    const savedOrder = await (
-      await order.save()
-    ).populate("BanId", "SoBan KhuVuc");
-    // 2. KIỂM TRA TỔNG THỂ: Nếu toàn bộ đơn đã là "DaRaMon" (hoặc DaHuy)
+    }
+
+    // Kiểm tra tổng thể xem tất cả món đã ra bàn hết chưa
     const isAllServed = order.ChiTietMon.every((item) =>
       ["DaRaMon", "DaHuy"].includes(item.TrangThaiMon),
     );
 
     if (isAllServed) {
       order.TrangThaiOrder = "DaPhucVu";
+    }
 
-      if (global.io) global.io.emit("order_updated", savedOrder);
+    // Đẩy lệnh Save xuống DB trước để giữ tính nhất quán dữ liệu
+    const savedOrder = await (
+      await order.save()
+    ).populate("BanId", "SoBan KhuVuc");
 
+    // Realtime 1: Thông báo cho khách biết món vừa được bưng ra
+    await createAndSendNotification({
+      zaloId: savedOrder.KhachHangZaloId,
+      title: "Món ăn đã phục vụ",
+      message: `Món [${servedItemName}] đã được bưng ra bàn của bạn.`,
+      type: "STATUS",
+      isStaff: false,
+      tableInfo: savedOrder.BanId,
+      orderId: savedOrder._id,
+    });
+
+    if (isAllServed) {
       const table = await Table.findById(order.BanId);
       if (table) {
         table.TrangThai = "Chờ thanh toán";
         await table.save();
         if (global.io) global.io.emit("table_updated", table);
       }
+
+      // Realtime 2: Nếu lên đủ món, gửi thông báo tổng kết cho khách vui vẻ
+      await createAndSendNotification({
+        zaloId: savedOrder.KhachHangZaloId,
+        title: "Món ăn đã lên đủ",
+        message:
+          "Toàn bộ các món ăn trong đơn hàng của bạn đã được phục vụ đầy đủ. Chúc quý khách ngon miệng!",
+        type: "UPDATE",
+        isStaff: false,
+        tableInfo: savedOrder.BanId,
+        orderId: savedOrder._id,
+      });
     }
+
+    // Phát socket cho app của phục vụ/thu ngân đồng bộ UI
+    if (global.io) global.io.emit("order_updated", savedOrder);
 
     res.json({ message: 0, data: savedOrder });
   } catch (error) {
-    res.status(400).json({ message: "Lỗi", error: error.message });
+    res
+      .status(400)
+      .json({ message: "Lỗi xác nhận phục vụ", error: error.message });
   }
 };
 const getOrdersForStaff = async (req, res) => {
@@ -617,14 +652,18 @@ const cancelOrderItem = async (req, res) => {
         const message = `Món "${itemToCancel.TenMon.vi || itemToCancel.TenMon}" đã bị hủy. 
         Lý do: ${reason || "Hết nguyên liệu"}`;
 
-        await createAndSendNotification(
-          order.KhachHangZaloId,
-          title,
-          message,
-          "CANCEL",
-          { SoBan: savedOrder.BanId?.SoBan, KhuVuc: savedOrder.BanId?.KhuVuc },
-          order._id,
-        );
+        await createAndSendNotification({
+          zaloId: order.KhachHangZaloId,
+          title: title,
+          message: message,
+          type: "CANCEL",
+          isStaff: false,
+          tableInfo: {
+            SoBan: savedOrder.BanId?.SoBan,
+            KhuVuc: savedOrder.BanId?.KhuVuc,
+          },
+          orderId: order._id,
+        });
       } else {
         global.io.emit("item-cancelled-by-customer", {
           orderId: order._id,
