@@ -7,9 +7,9 @@ const {
   deleteNotification,
   clearAllNotifications,
 } = require("../controllers/notification");
-
-router.get("/:zaloId", getNotifications);
 router.get("/staff", getNotificationsForStaff);
+router.get("/:zaloId", getNotifications);
+
 router.put("/read-all/:zaloId", markAllAsRead);
 router.delete("/:id", deleteNotification);
 router.delete("/clear-all/:zaloId", clearAllNotifications);

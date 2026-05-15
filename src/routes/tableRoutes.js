@@ -13,6 +13,9 @@ const {
 // GET /api/tables/calling -> Lấy danh sách bàn đang gọi nhân viên
 router.route("/calling").get(getCallingTables);
 
+// PUT /api/tables/status/:id -> Cập nhật trạng thái bàn
+router.route("/status/:id").put(updateTableStatus);
+
 // GET /api/tables -> Lấy danh sách
 router.route("/").get(getTables);
 
@@ -24,9 +27,6 @@ router.route("/").post(createTable);
 
 // PUT /api/tables/:id -> Cập nhật thông tin bàn
 router.route("/:id").put(updateTableInfo);
-
-// PUT /api/tables/status/:id -> Cập nhật trạng thái bàn
-router.route("/status/:id").put(updateTableStatus);
 
 // PUT /api/tables/:id/reset-call -> Reset trạng thái gọi nhân viên
 router.route("/:id/reset-call").put(resetTableCall);
