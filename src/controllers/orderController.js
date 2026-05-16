@@ -401,7 +401,7 @@ const updateStaffOrderStatus = async (req, res) => {
       } else if (newStatus === "DaXong") {
         await createAndSendNotification({
           title: "Món ăn đã sẵn sàng",
-          message: `Món từ quầy ${role} cho ${updatedOrder.BanId?.SoBan} đã sẵn sàng!`,
+          message: `Món từ quầy ${role} đã sẵn sàng!`,
           type: "SERVICE",
           isStaff: true,
           tableInfo: updatedOrder.BanId,

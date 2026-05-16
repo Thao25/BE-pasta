@@ -1,4 +1,6 @@
 const Restaurant = require("../models/restaurant");
+const Food = require("../models/Food");
+const Table = require("../models/table");
 const redisClient = require("../redis/redisClient");
 const CACHE_KEYS = require("../redis/cacheKeys");
 // @desc    Lấy thông tin cấu hình nhà hàng
@@ -22,8 +24,17 @@ const getRestaurantInfo = async (req, res) => {
         },
       });
     }
+    const activeCategories = await Food.distinct("LoaiMon");
+    const activeAreas = await Table.distinct("KhuVuc");
 
-    res.json({ message: 0, data: restaurant });
+    res.json({
+      message: 0,
+      data: {
+        ...restaurant.toObject(),
+        KhuVucDangDung: activeAreas,
+        LoaiMonDangDung: activeCategories,
+      },
+    });
   } catch (error) {
     res.status(500).json({ message: 1, error: error.message });
   }
