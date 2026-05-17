@@ -1,10 +1,10 @@
 const crypto = require("crypto");
-function createChatCacheKey(message, zaloId) {
+function createChatCacheKey(message, zaloId, lang = "vi") {
   const normalizedMessage = (message || "").trim().toLowerCase();
 
   const hash = crypto.createHash("md5").update(normalizedMessage).digest("hex");
 
-  return `ai:chat:${zaloId || "guest"}:${hash}`;
+  return `ai:chat:${zaloId || "guest"}:${hash}:${lang}`;
 }
 function getTimeBucket() {
   const hour = new Date().getHours();

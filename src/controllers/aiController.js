@@ -4,19 +4,48 @@ const Order = require("../models/order");
 const redisClient = require("../redis/redisClient");
 
 const CACHE_KEYS = require("../redis/cacheKeys");
+
+const STATUS_TRANSLATIONS = {
+  ChoXuLy: {
+    vi: "Chờ xử lý (Đang chờ nhà hàng xác nhận)",
+    en: "Pending (Waiting for restaurant confirmation)",
+  },
+  DangCheBien: {
+    vi: "Đang chế biến (Đầu bếp đang làm món)",
+    en: "Cooking (Chef is preparing your food)",
+  },
+  DaLamXong: {
+    vi: "Đã làm xong (Chờ mang ra bàn)",
+    en: "Ready (Waiting to be served)",
+  },
+  DaPhucVu: {
+    vi: "Đã phục vụ (Đã mang ra bàn)",
+    en: "Served",
+  },
+  HoanTat: {
+    vi: "Đã hoàn tất thanh toán",
+    en: "Completed & Paid",
+  },
+  DaHuy: {
+    vi: "Đã hủy đơn",
+    en: "Cancelled",
+  },
+};
+
+const getStatusText = (status, lang) => {
+  return STATUS_TRANSLATIONS[status]?.[lang] || status;
+};
 // --- PHẦN 1: AI
-function localAIResponse(message, foods, restaurantInfo, currentOrder) {
+function localAIResponse(
+  message,
+  foods,
+  restaurantInfo,
+  currentOrder,
+  lang = "vi",
+) {
   const msg = (message || "").toLowerCase();
 
-  // Phát hiện tiếng Anh
-  const isEnglish =
-    msg.includes("hello") ||
-    msg.includes("hi ") ||
-    msg.includes("english") ||
-    msg.includes("wifi pass") ||
-    msg.includes("price") ||
-    msg.includes("order");
-
+  const isEnglish = lang === "en";
   // 1. HỎI VỀ ĐƠN HÀNG
   if (
     msg.includes("đơn") ||
@@ -37,7 +66,7 @@ function localAIResponse(message, foods, restaurantInfo, currentOrder) {
       };
     }
 
-    const status = currentOrder.TrangThaiOrder;
+    const status = getStatusText(currentOrder.TrangThaiOrder, lang);
     const items = currentOrder.ChiTietMon.map((i) =>
       isEnglish ? i.TenMon.en : i.TenMon.vi,
     ).join(", ");
@@ -175,12 +204,12 @@ function localAIResponse(message, foods, restaurantInfo, currentOrder) {
 }
 
 // --- PHẦN 2: GROQ API (GỌI ONLINE) ---
-async function callGroqAI(prompt) {
+async function callGroqAI(prompt, lang = "vi") {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error("Chưa cấu hình GROQ_API_KEY");
 
   const url = "https://api.groq.com/openai/v1/chat/completions";
-
+  const languageTarget = lang === "en" ? "English" : "Vietnamese";
   const payload = {
     model: "llama-3.3-70b-versatile",
     messages: [
@@ -190,6 +219,7 @@ async function callGroqAI(prompt) {
 You are a concise AI restaurant assistant.
 
 Rules:
+- STRICT RULE: You MUST reply entirely in ${languageTarget}.
 - Always reply using customer's language.
 - Keep answers under 80 words.
 - Be friendly and professional.
@@ -303,8 +333,8 @@ function isOrderQuestion(message) {
 
 const chatWithAI = async (req, res) => {
   try {
-    const { message, zaloId } = req.body;
-    const aiCacheKey = CACHE_KEYS.AI_CHAT(message, zaloId);
+    const { message, zaloId, lang = "vi" } = req.body;
+    const aiCacheKey = `${CACHE_KEYS.AI_CHAT(message, zaloId)}:${lang}`;
 
     const shouldUseCache = !isOrderQuestion(message);
 
@@ -328,7 +358,10 @@ const chatWithAI = async (req, res) => {
     const info = restaurantInfo;
 
     let currentOrder = null;
-    let orderContext = "Khách chưa có đơn hàng nào đang hoạt động.";
+    let orderContext =
+      lang === "en"
+        ? "Customer does not have any active orders."
+        : "Khách chưa có đơn hàng nào đang hoạt động.";
 
     if (zaloId) {
       currentOrder = await Order.findOne({
@@ -342,10 +375,13 @@ const chatWithAI = async (req, res) => {
         const monAn = currentOrder.ChiTietMon.map(
           (m) => `${m.TenMon.vi} (${m.TenMon.en})`,
         ).join(", ");
+        const statusVi = getStatusText(currentOrder.TrangThaiOrder, "vi");
+        const statusEn = getStatusText(currentOrder.TrangThaiOrder, "en");
         orderContext = `
             THÔNG TIN ĐƠN HÀNG CỦA KHÁCH:
-            - Món: ${monAn}
-            - Trạng thái: ${currentOrder.TrangThaiOrder} (ChoXuLy: Pending, DangCheBien: Cooking, DaLamXong: Done, DaPhucVu: Served).
+            - Món: ${monAn}            
+            - Trạng thái tiếng Việt: ${statusVi}
+            - Status in English: ${statusEn}
             - Tổng tiền: ${currentOrder.TongTien}
             `;
       }
@@ -354,7 +390,13 @@ const chatWithAI = async (req, res) => {
     if (foods.length === 0)
       return res.json({
         message: 0,
-        data: { text: "Menu đang cập nhật ạ.", suggestions: [] },
+        data: {
+          text:
+            lang === "en"
+              ? "Our menu is currently updating."
+              : "Menu đang cập nhật ạ.",
+          suggestions: [],
+        },
       });
 
     try {
@@ -389,8 +431,7 @@ CUSTOMER MESSAGE:
 "${message}"
 
 RULES:
-- Detect Vietnamese or English automatically.
-- Reply in the same language as the customer.
+- TARGET LANGUAGE: You MUST reply in ${lang === "en" ? "ENGLISH" : "VIETNAMESE"}.
 - Keep responses short, natural, and professional.
 - Prioritize order status and restaurant information.
 - Only recommend items from MENU.
@@ -399,7 +440,7 @@ SUGGEST_IDS:id1,id2
 - Do not invent menu items or prices.
 `;
 
-      const rawText = await callGroqAI(prompt);
+      const rawText = await callGroqAI(prompt, lang);
 
       let replyText = rawText;
       let suggestedFoods = [];
@@ -428,7 +469,13 @@ SUGGEST_IDS:id1,id2
       });
     } catch (apiError) {
       console.warn("⚠️ AI Online lỗi:", apiError.message);
-      const localResult = localAIResponse(message, foods, info, currentOrder);
+      const localResult = localAIResponse(
+        message,
+        foods,
+        info,
+        currentOrder,
+        lang,
+      );
 
       if (shouldUseCache) {
         await redisClient.set(aiCacheKey, JSON.stringify(localResult), {
@@ -442,9 +489,13 @@ SUGGEST_IDS:id1,id2
       });
     }
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: 1, data: { text: "Lỗi hệ thống.", suggestions: [] } });
+    res.status(500).json({
+      message: 1,
+      data: {
+        text: req.body.lang === "en" ? "System error." : "Lỗi hệ thống.",
+        suggestions: [],
+      },
+    });
   }
 };
 
