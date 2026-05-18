@@ -111,15 +111,15 @@ const startCronJobs = () => {
     }
   });
 
-  // 3. Tác vụ dọn bàn "treo" (Khách quét QR quá 20 phút mà không đặt món)
+  // 3. Tác vụ dọn bàn "treo" (Khách quét QR quá 30 phút mà không đặt món)
   cron.schedule("* * * * *", async () => {
     try {
-      const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000);
+      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
 
       const idleTables = await Table.find({
         TrangThai: { $in: ["Có Khách", "Chờ thanh toán"] },
         OrderHienTaiId: null,
-        ThoiGianCho: { $lte: twentyMinutesAgo },
+        ThoiGianCho: { $lte: thirtyMinutesAgo },
       });
 
       if (idleTables.length > 0) {

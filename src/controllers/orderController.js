@@ -467,7 +467,7 @@ const serverConfirmServed = async (req, res) => {
     await createAndSendNotification({
       zaloId: savedOrder.KhachHangZaloId,
       title: "Món ăn đã phục vụ",
-      message: `Món [${servedItemName}] đã được bưng ra bàn của bạn.`,
+      message: `Món [${servedItemName}] đã được mang ra bàn của bạn.`,
       type: "STATUS",
       isStaff: false,
       tableInfo: savedOrder.BanId,

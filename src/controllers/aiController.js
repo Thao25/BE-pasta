@@ -157,7 +157,7 @@ function localAIResponse(
 
   // 5. Chào hỏi
   if (msg.includes("chào") || msg.includes("hi ") || msg.includes("hello")) {
-    const name = restaurantInfo?.TenNhaHang || "Pasta";
+    const name = lang === "vi" ? restaurantInfo.TenNhaHang : "Pasta Restaurant";
     return {
       text: isEnglish
         ? `Hello! 👋 I'm the AI assistant of ${name}. Need help with Wifi, Order status, or Food recommendations?`

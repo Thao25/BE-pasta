@@ -24,7 +24,7 @@ function createRecommendCacheKey(zaloId) {
 }
 module.exports = {
   FOODS_ALL: "foods:all",
-  DASHBOARD_TODAY: "dashboard:today",
+
   RESTAURANT_INFO: "restaurant:info",
   RESTAURANT_ALL: "restaurant:all",
   FOODS_RECOMMEND: "foods:recommend",
