@@ -129,7 +129,7 @@ const createOrder = async (req, res) => {
     if (!finalOrder) {
       finalOrder = new Order({
         BanId,
-        KhachHangZaloId = KhachHangZaloId || null,
+        KhachHangZaloId: KhachHangZaloId || null,
         ChiTietMon: processedNewItems,
         TongTien: Math.round(tongTienMoiCoThue),
         TrangThaiOrder: "ChoXuLy",
