@@ -60,7 +60,8 @@ const startCronJobs = () => {
       openingDate.setHours(h, m, 0, 0);
 
       // Tính mốc thời gian dọn dẹp (Giờ mở cửa - 10 phút)
-      const cleanupThreshold = new Date(openingDate.getTime() - 10 * 60000);
+      // const cleanupThreshold = new Date(openingDate.getTime() - 10 * 60000);
+      const cleanupThreshold = new Date(openingDate.getTime() + 50 * 60000);
 
       // Nếu bây giờ trùng khớp với phút dọn dẹp (Ví dụ mở cửa 8:00 -> dọn lúc 7:50)
       if (
