@@ -334,6 +334,19 @@ function isOrderQuestion(message) {
 const chatWithAI = async (req, res) => {
   try {
     const { message, zaloId, lang = "vi" } = req.body;
+    if (!zaloId || zaloId === "null" || zaloId === "undefined") {
+      return res.status(400).json({
+        message: 1,
+        error: "Tính năng trò chuyện AI chỉ dành cho Khách Hàng.",
+        data: {
+          text:
+            lang === "en"
+              ? "AI Chat is only available for Customers."
+              : "Tính năng AI chỉ dành cho Khách Hàng sử dụng ạ.",
+          suggestions: [],
+        },
+      });
+    }
     const aiCacheKey = `${CACHE_KEYS.AI_CHAT(message, zaloId)}:${lang}`;
 
     const shouldUseCache = !isOrderQuestion(message);
@@ -504,6 +517,9 @@ SUGGEST_IDS:id1,id2
 const recommendFood = async (req, res) => {
   try {
     const { zaloId } = req.query;
+    if (!zaloId || zaloId === "null" || zaloId === "undefined") {
+      return res.json({ message: 0, data: [] });
+    }
     const recommendCacheKey = CACHE_KEYS.AI_RECOMMEND(zaloId);
 
     const recommendCache = await redisClient.get(recommendCacheKey);

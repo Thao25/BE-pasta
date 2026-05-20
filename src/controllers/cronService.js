@@ -58,18 +58,14 @@ const startCronJobs = () => {
 
       const openingDate = new Date(vnTime);
       openingDate.setHours(h, m, 0, 0);
-
-      const gioDongCua = res.CauHinh.GioDongCua || "22:00";
-      const [hClose, mClose] = gioDongCua.split(":").map(Number);
-
-      const closingDate = new Date(vnTime);
-      closingDate.setHours(hClose, mClose, 0, 0);
-      //
-
       // Tính mốc thời gian dọn dẹp (Giờ mở cửa - 10 phút)
-      // const cleanupThreshold = new Date(openingDate.getTime() - 10 * 60000);
-      //
-      const cleanupThreshold = new Date(closingDate.getTime() + 60 * 60000);
+      const cleanupThreshold = new Date(openingDate.getTime() - 10 * 60000);
+      //  const gioDongCua = res.CauHinh.GioDongCua || "22:00";
+      // const [hClose, mClose] = gioDongCua.split(":").map(Number);
+
+      // const closingDate = new Date(vnTime);
+      // closingDate.setHours(hClose, mClose, 0, 0);
+      // const cleanupThreshold = new Date(closingDate.getTime() + 60 * 60000);
 
       // Nếu bây giờ trùng khớp với phút dọn dẹp (Ví dụ mở cửa 8:00 -> dọn lúc 7:50)
       if (

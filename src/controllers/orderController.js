@@ -115,6 +115,8 @@ const createOrder = async (req, res) => {
         existingOrder.ChiTietMon.push(...processedNewItems);
         existingOrder.TongTien += Math.round(tongTienMoiCoThue);
         existingOrder.TrangThaiOrder = "ChoXuLy";
+        existingOrder.updatedAt = new Date();
+        existingOrder.markModified("ChiTietMon");
         finalOrder = await existingOrder.save();
 
         table.TrangThai = "Có Khách";
@@ -127,7 +129,7 @@ const createOrder = async (req, res) => {
     if (!finalOrder) {
       finalOrder = new Order({
         BanId,
-        KhachHangZaloId,
+        KhachHangZaloId = KhachHangZaloId || null,
         ChiTietMon: processedNewItems,
         TongTien: Math.round(tongTienMoiCoThue),
         TrangThaiOrder: "ChoXuLy",
@@ -203,7 +205,7 @@ const getOrderById = async (req, res) => {
   }
 };
 
-// @desc    Cập nhật trạng thái đơn hàng (Bếp làm xong, Thu ngân xác nhận trả tiền)
+// @desc    Cập nhật trạng thái đơn hàng (Thu ngân xác nhận trả tiền)
 // @route   PUT /api/orders/:id
 const updateOrderStatus = async (req, res) => {
   try {
